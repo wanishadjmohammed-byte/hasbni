@@ -1,0 +1,19 @@
+{
+  "name": "Hasbni — gestion des dettes entre amis",
+  "short_name": "Hasbni",
+  "description": "Le releve de compte clair entre potes : qui doit quoi, sans prise de tete.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E9FFF4",
+  "theme_color": "#22A06B",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

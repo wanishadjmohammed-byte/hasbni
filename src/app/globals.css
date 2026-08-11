@@ -1,0 +1,202 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy: #0B3A2B;
+  --brand: #22A06B;
+  --ocean: #14724F;
+  --cream: #FFFAE6;
+  --mist: #E9FFF4;
+  --frost: #A9FBD7;
+  --silver: #E4EEE8;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+html,
+body {
+  background-color: #E9FFF4;
+  color: #0B3A2B;
+  font-family: var(--font-sans);
+  height: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Fond de page — degrade principal */
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(135deg, #E9FFF4 0%, #A9FBD7 45%, #E4EEE8 100%);
+}
+
+/* ── Blobs animes ── */
+.blob {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(90px);
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform;
+}
+
+.blob-1 {
+  width: 700px;
+  height: 700px;
+  background: radial-gradient(circle, #A9FBD7 0%, #E9FFF4 70%);
+  top: -200px;
+  left: -150px;
+  opacity: 0.7;
+  animation: blob-move1 14s ease-in-out infinite;
+}
+
+.blob-2 {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(34, 160, 107, 0.12) 0%, transparent 70%);
+  top: 40%;
+  right: -100px;
+  opacity: 1;
+  animation: blob-move2 18s ease-in-out infinite;
+}
+
+.blob-3 {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, #A9FBD7 0%, #E9FFF4 60%);
+  bottom: -150px;
+  left: 25%;
+  opacity: 0.5;
+  animation: blob-move3 16s ease-in-out infinite;
+}
+
+@keyframes blob-move1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(30px, -40px) scale(1.06); }
+  66%      { transform: translate(-20px, 25px) scale(0.94); }
+}
+
+@keyframes blob-move2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(-40px, 30px) scale(1.08); }
+  66%      { transform: translate(25px, -20px) scale(0.92); }
+}
+
+@keyframes blob-move3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(20px, 35px) scale(1.05); }
+  66%      { transform: translate(-30px, -15px) scale(0.96); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blob { animation: none; }
+}
+
+/* ── Utilitaires verre ── */
+.glass {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow:
+    0 4px 24px rgba(20, 114, 79, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.glass-sm {
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 2px 12px rgba(20, 114, 79, 0.06);
+}
+
+.glass-sidebar {
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border-right: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 4px 0 32px rgba(20, 114, 79, 0.07);
+}
+
+.glass-nav {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-top: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 -4px 24px rgba(20, 114, 79, 0.07);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: rgba(233, 255, 244, 0.5); }
+::-webkit-scrollbar-thumb { background: rgba(34, 160, 107, 0.3); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(34, 160, 107, 0.55); }
+
+/* ── Champs de formulaire ── */
+input[type='text'],
+input[type='number'],
+input[type='date'],
+input[type='email'],
+input[type='tel'],
+input[type='password'],
+input[type='search'],
+textarea,
+select {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(34, 160, 107, 0.25);
+  color: #0B3A2B;
+  border-radius: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  width: 100%;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #22A06B;
+  box-shadow: 0 0 0 3px rgba(34, 160, 107, 0.18);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(11, 58, 43, 0.38);
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.7) inset;
+  -webkit-text-fill-color: #0B3A2B;
+  border-color: rgba(34, 160, 107, 0.25);
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+select option {
+  background: #E9FFF4;
+  color: #0B3A2B;
+}
+
+/* Retire les fleches des inputs number */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] { -moz-appearance: textfield; }
+
+/* ── Ligne de timeline relation ── */
+.timeline-rail {
+  position: absolute;
+  left: 19px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(34, 160, 107, 0.28), rgba(34, 160, 107, 0.05));
+}
