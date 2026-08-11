@@ -14,6 +14,8 @@ import { useAuth } from './AuthContext'
 import { uid } from '@/lib/ledger'
 import {
   bumpAttempts,
+  clearQueue,
+  clearSnapshot,
   dequeueOp,
   enqueueOp,
   loadSnapshot,
@@ -144,6 +146,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('offline', down)
     }
   }, [])
+
+  // Changement de compte sur le meme appareil : la file et l'instantane du
+  // compte precedent n'ont plus aucun sens ici — les rejouer sous une autre
+  // identite provoquerait des refus de la RLS.
+  useEffect(() => {
+    if (demo || !profileId) return
+    const KEY = 'hasbni.lastProfile'
+    const previous = window.localStorage.getItem(KEY)
+    if (previous && previous !== profileId) {
+      void clearQueue()
+      void clearSnapshot()
+      setPendingSync(0)
+    }
+    window.localStorage.setItem(KEY, profileId)
+  }, [demo, profileId])
 
   // ── Hydratation : instantane IndexedDB d'abord, reseau ensuite ───────────
   useEffect(() => {

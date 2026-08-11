@@ -229,36 +229,23 @@ export async function pushOp(sb: SB, profileId: ID, op: Op): Promise<void> {
     }
 
     case 'group.create': {
-      const { error } = await sb.from('groups').upsert(
-        {
-          id: op.group.id,
-          name: op.group.name,
-          emoji: op.group.emoji,
-          owner_id: profileId,
-          created_at: op.group.createdAt,
-        },
-        { onConflict: 'id', ignoreDuplicates: true }
-      )
+      // Une seule transaction cote serveur : le groupe et ses membres sont
+      // crees ensemble, jamais l'un sans l'autre.
+      const { error } = await sb.rpc('create_group', {
+        p_name: op.group.name,
+        p_emoji: op.group.emoji,
+        p_member_ids: op.memberIds.filter((id) => id !== profileId),
+        p_group_id: op.group.id,
+      })
       classifyIfError(error)
-
-      const ids = Array.from(new Set([profileId, ...op.memberIds]))
-      const { error: memberError } = await sb.from('group_members').upsert(
-        ids.map((userId) => ({ group_id: op.group.id, user_id: userId })),
-        { onConflict: 'group_id,user_id', ignoreDuplicates: true }
-      )
-      classifyIfError(memberError)
       return
     }
 
     case 'group.member.add': {
-      // La politique group_members_insert autorise tout membre du groupe,
-      // pas seulement son proprietaire.
-      const { error } = await sb
-        .from('group_members')
-        .upsert({ group_id: op.groupId, user_id: op.userId }, {
-          onConflict: 'group_id,user_id',
-          ignoreDuplicates: true,
-        })
+      const { error } = await sb.rpc('add_group_member', {
+        p_group_id: op.groupId,
+        p_user_id: op.userId,
+      })
       classifyIfError(error)
       return
     }

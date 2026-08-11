@@ -116,6 +116,14 @@ export interface Database {
     Functions: {
       send_friend_request: { Args: { target_email: string }; Returns: string }
       respond_friend_request: { Args: { request_id: string; accept: boolean }; Returns: string }
+      create_group: {
+        Args: { p_name: string; p_emoji: string; p_member_ids: string[]; p_group_id: string }
+        Returns: string
+      }
+      add_group_member: {
+        Args: { p_group_id: string; p_user_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       split_type: 'equal' | 'custom' | 'items'
