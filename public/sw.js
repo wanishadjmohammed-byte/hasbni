@@ -2,12 +2,21 @@
    Strategie : app shell precachee, navigations en network-first avec repli
    hors ligne, statiques Next en cache-first, reste en stale-while-revalidate. */
 
-const VERSION = 'hasbni-v1'
+const VERSION = 'hasbni-v2'
 const SHELL_CACHE = `${VERSION}-shell`
 const STATIC_CACHE = `${VERSION}-static`
 const PAGES_CACHE = `${VERSION}-pages`
 
-const APP_SHELL = ['/', '/groupes', '/activite', '/profil', '/offline', '/manifest.json', '/icon.svg']
+const APP_SHELL = [
+  '/',
+  '/groupes',
+  '/activite',
+  '/profil',
+  '/offline',
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
