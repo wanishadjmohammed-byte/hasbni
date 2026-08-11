@@ -83,6 +83,8 @@ interface AppContextValue {
   addFriend: (email: string) => Promise<'sent' | 'accepted'>
   respondToRequest: (requestId: ID, accept: boolean) => Promise<void>
   createGroup: (name: string, emoji: string, memberIds: ID[]) => Group
+  /** N'importe quel membre du groupe peut en ajouter d'autres. */
+  addGroupMember: (groupId: ID, userId: ID) => void
   updateProfile: (patch: Partial<Pick<User, 'name' | 'phone' | 'email' | 'avatar'>>) => void
   refresh: () => Promise<void>
   resetDemo: () => void
@@ -376,6 +378,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [dispatch, currentId]
   )
 
+  const addGroupMember = useCallback(
+    (groupId: ID, userId: ID) => dispatch({ kind: 'group.member.add', groupId, userId }),
+    [dispatch]
+  )
+
   const updateProfile = useCallback(
     (patch: Partial<User>) => dispatch({ kind: 'profile.update', id: currentId, patch }),
     [dispatch, currentId]
@@ -418,6 +425,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addFriend,
       respondToRequest,
       createGroup,
+      addGroupMember,
       updateProfile,
       refresh,
       resetDemo,
@@ -442,6 +450,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addFriend,
       respondToRequest,
       createGroup,
+      addGroupMember,
       updateProfile,
       refresh,
       resetDemo,

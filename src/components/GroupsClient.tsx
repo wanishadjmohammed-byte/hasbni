@@ -13,6 +13,7 @@ import PageHeader from './PageHeader'
 import { useApp } from '@/context/AppContext'
 import {
   formatAmount,
+  friendIds,
   groupMembersOf,
   relationBalance,
   simplifyGroup,
@@ -22,7 +23,7 @@ import { cardHover, listItemY, listParent, pageIn } from '@/lib/motion'
 import type { ID } from '@/lib/types'
 
 export default function GroupsClient() {
-  const { state, me, createGroup, toast } = useApp()
+  const { state, me, createGroup, addGroupMember, toast } = useApp()
   const [openGroup, setOpenGroup] = useState<ID | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [simplifyOpen, setSimplifyOpen] = useState<ID | null>(null)
@@ -38,6 +39,14 @@ export default function GroupsClient() {
     () => (simplifyTarget ? simplifyGroup(state, simplifyTarget.id) : []),
     [state, simplifyTarget]
   )
+
+  // Potes pas encore membres : ajoutables par n'importe quel membre.
+  const addableToGroup = group
+    ? friendIds(state)
+        .filter((id) => !state.groupMembers.some((m) => m.groupId === group.id && m.userId === id))
+        .map((id) => state.users.find((u) => u.id === id))
+        .filter((u): u is NonNullable<typeof u> => Boolean(u))
+    : []
 
   const submitGroup = () => {
     if (!name.trim()) return
@@ -204,6 +213,33 @@ export default function GroupsClient() {
                 </div>
               )
             })}
+
+            <div className="pt-2">
+              <p className="mb-1.5 text-xs font-medium text-navy/50">Ajouter un membre</p>
+              {addableToGroup.length === 0 ? (
+                <p className="text-[11px] font-medium text-navy/45">
+                  Tous tes potes sont deja dans ce groupe. Ajoute d&apos;abord un pote depuis
+                  l&apos;onglet Profil.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {addableToGroup.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => {
+                        addGroupMember(group.id, u.id)
+                        toast(`${u.name} ajoute a ${group.name}`)
+                      }}
+                      className="flex items-center gap-2 rounded-full border border-silver py-1.5 pl-1.5 pr-3 text-xs font-semibold text-navy/60 transition-colors hover:border-brand/40 hover:bg-brand/10 hover:text-navy"
+                    >
+                      <Avatar user={u} size="sm" className="h-6 w-6 text-xs" />
+                      {u.name}
+                      <Plus size={13} className="text-brand" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </Modal>
@@ -307,8 +343,9 @@ export default function GroupsClient() {
           <div>
             <p className="mb-1.5 text-xs font-medium text-navy/50">Membres</p>
             <div className="flex flex-wrap gap-2">
-              {state.users
-                .filter((u) => u.id !== me.id)
+              {friendIds(state)
+                .map((id) => state.users.find((u) => u.id === id))
+                .filter((u): u is NonNullable<typeof u> => Boolean(u))
                 .map((u) => {
                   const on = members.includes(u.id)
                   return (

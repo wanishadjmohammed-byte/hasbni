@@ -250,6 +250,19 @@ export async function pushOp(sb: SB, profileId: ID, op: Op): Promise<void> {
       return
     }
 
+    case 'group.member.add': {
+      // La politique group_members_insert autorise tout membre du groupe,
+      // pas seulement son proprietaire.
+      const { error } = await sb
+        .from('group_members')
+        .upsert({ group_id: op.groupId, user_id: op.userId }, {
+          onConflict: 'group_id,user_id',
+          ignoreDuplicates: true,
+        })
+      classifyIfError(error)
+      return
+    }
+
     case 'profile.update': {
       const { error } = await sb
         .from('profiles')

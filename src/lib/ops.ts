@@ -21,6 +21,7 @@ export type Op =
   | { kind: 'settlement.confirm'; id: ID; confirmedAt: string }
   | { kind: 'movement.cancel'; target: 'expense' | 'settlement'; id: ID; inverse: LedgerEntry[] }
   | { kind: 'group.create'; group: Group; memberIds: ID[] }
+  | { kind: 'group.member.add'; groupId: ID; userId: ID }
   | { kind: 'profile.update'; id: ID; patch: Partial<User> }
 
 export interface QueuedOp {
@@ -91,6 +92,17 @@ export function applyOp(state: AppState, op: Op): AppState {
           ...state.groupMembers,
           ...ids.map((userId) => ({ groupId: op.group.id, userId })),
         ],
+      }
+    }
+
+    case 'group.member.add': {
+      const already = state.groupMembers.some(
+        (m) => m.groupId === op.groupId && m.userId === op.userId
+      )
+      if (already) return state
+      return {
+        ...state,
+        groupMembers: [...state.groupMembers, { groupId: op.groupId, userId: op.userId }],
       }
     }
 
