@@ -14,6 +14,14 @@ const RETRYABLE_CODES = new Set(['08000', '08006', '08003', '57014', '40001', '4
  * La fonction SQL n'existe pas encore dans ce projet (patch non applique).
  * On sait alors retomber sur le chemin equivalent en requetes directes.
  */
+/**
+ * Rejeu d'une operation deja passee : la cle primaire existe. C'est le
+ * comportement attendu d'une file idempotente, pas une erreur.
+ */
+function isDuplicate(error: { code?: string; message: string } | null): boolean {
+  return error?.code === '23505'
+}
+
 function isMissingFunction(error: { code?: string; message: string } | null): boolean {
   if (!error) return false
   return error.code === 'PGRST202' || /could not find the function/i.test(error.message)
@@ -172,7 +180,7 @@ export async function respondFriendRequest(
 export async function pushOp(sb: SB, profileId: ID, op: Op): Promise<void> {
   switch (op.kind) {
     case 'expense.create': {
-      const { error } = await sb.from('expenses').upsert(
+      const { error } = await sb.from('expenses').insert(
         {
           id: op.expense.id,
           group_id: op.expense.groupId,
@@ -184,25 +192,23 @@ export async function pushOp(sb: SB, profileId: ID, op: Op): Promise<void> {
           cancelled: false,
           created_by: profileId,
           created_at: op.expense.createdAt,
-        },
-        { onConflict: 'id', ignoreDuplicates: true }
+        }
       )
       classifyIfError(error)
 
-      const { error: shareError } = await sb.from('expense_shares').upsert(
+      const { error: shareError } = await sb.from('expense_shares').insert(
         op.shares.map((s) => ({
           expense_id: s.expenseId,
           user_id: s.userId,
           share_amount: s.shareAmount,
-        })),
-        { onConflict: 'expense_id,user_id', ignoreDuplicates: true }
+        }))
       )
       classifyIfError(shareError)
       return
     }
 
     case 'settlement.create': {
-      const { error } = await sb.from('settlements').upsert(
+      const { error } = await sb.from('settlements').insert(
         {
           id: op.settlement.id,
           from_user: op.settlement.fromUser,
@@ -213,8 +219,7 @@ export async function pushOp(sb: SB, profileId: ID, op: Op): Promise<void> {
           status: 'pending',
           cancelled: false,
           created_at: op.settlement.createdAt,
-        },
-        { onConflict: 'id', ignoreDuplicates: true }
+        }
       )
       classifyIfError(error)
       return
@@ -252,24 +257,23 @@ export async function pushOp(sb: SB, profileId: ID, op: Op): Promise<void> {
       }
 
       // Repli pour un projet ou le patch 04 n'a pas encore ete applique.
-      const { error: groupError } = await sb.from('groups').upsert(
-        {
-          id: op.group.id,
-          name: op.group.name,
-          emoji: op.group.emoji,
-          owner_id: profileId,
-          created_at: op.group.createdAt,
-        },
-        { onConflict: 'id', ignoreDuplicates: true }
-      )
+      const { error: groupError } = await sb.from('groups').insert({
+        id: op.group.id,
+        name: op.group.name,
+        emoji: op.group.emoji,
+        owner_id: profileId,
+        created_at: op.group.createdAt,
+      })
       classifyIfError(groupError)
 
+      // Membre par membre : un doublon isole ne doit pas faire echouer le lot.
       const ids = Array.from(new Set([profileId, ...op.memberIds]))
-      const { error: memberError } = await sb.from('group_members').upsert(
-        ids.map((userId) => ({ group_id: op.group.id, user_id: userId })),
-        { onConflict: 'group_id,user_id', ignoreDuplicates: true }
-      )
-      classifyIfError(memberError)
+      for (const userId of ids) {
+        const { error: memberError } = await sb
+          .from('group_members')
+          .insert({ group_id: op.group.id, user_id: userId })
+        classifyIfError(memberError)
+      }
       return
     }
 
@@ -287,10 +291,7 @@ export async function pushOp(sb: SB, profileId: ID, op: Op): Promise<void> {
       // Repli : la politique group_members_insert autorise deja tout membre.
       const { error: directError } = await sb
         .from('group_members')
-        .upsert({ group_id: op.groupId, user_id: op.userId }, {
-          onConflict: 'group_id,user_id',
-          ignoreDuplicates: true,
-        })
+        .insert({ group_id: op.groupId, user_id: op.userId })
       classifyIfError(directError)
       return
     }
@@ -312,5 +313,5 @@ export async function pushOp(sb: SB, profileId: ID, op: Op): Promise<void> {
 }
 
 function classifyIfError(error: { code?: string; message: string } | null): void {
-  if (error) classify(error)
+  if (error && !isDuplicate(error)) classify(error)
 }
