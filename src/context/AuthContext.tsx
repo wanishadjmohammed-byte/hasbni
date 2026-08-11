@@ -47,6 +47,17 @@ function translateError(message: string): string {
   if (m.includes('unable to validate email') || m.includes('invalid email')) {
     return 'Adresse email invalide.'
   }
+  // Quota d'envoi d'emails du projet Supabase (~2/heure sur le SMTP partage) :
+  // ce n'est pas l'utilisateur qui insiste, c'est le projet qui est plafonne.
+  if (m.includes('email rate limit') || m.includes('over_email_send_rate_limit')) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(
+        '[Hasbni] Quota d’emails Supabase atteint. Pour creer des comptes sans email : ' +
+          'Authentication > Sign In / Providers > Email > desactiver « Confirm email ».'
+      )
+    }
+    return "Le service d'email est sature pour le moment. Reessaie dans une heure, ou demande a l'administrateur de desactiver la confirmation par email."
+  }
   if (m.includes('rate limit') || m.includes('too many requests')) {
     return 'Trop de tentatives — reessaie dans un moment.'
   }
