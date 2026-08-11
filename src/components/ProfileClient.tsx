@@ -69,14 +69,14 @@ export default function ProfileClient() {
         action={
           <button
             onClick={() => setFriendOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
+            className="tap flex shrink-0 items-center gap-1.5 rounded-xl bg-brand px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
           >
             <UserPlus size={16} /> Pote
           </button>
         }
       />
 
-      <motion.div {...pageIn} className="space-y-4 p-6">
+      <motion.div {...pageIn} className="safe-x space-y-4 p-6">
         <div className="glass rounded-2xl p-4">
           <div className="flex items-center gap-3">
             <Avatar user={{ name, avatar, color: me.color }} size="xl" />
@@ -112,7 +112,7 @@ export default function ProfileClient() {
 
           <button
             onClick={save}
-            className="mt-4 flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
+            className="mt-4 flex items-center gap-1.5 rounded-xl bg-brand tap px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
           >
             <Save size={15} /> Enregistrer
           </button>
@@ -253,14 +253,14 @@ export default function ProfileClient() {
           <div className="flex items-center justify-end gap-3">
             <button
               onClick={() => setFriendOpen(false)}
-              className="rounded-xl border border-silver px-4 py-2 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
+              className="rounded-xl border border-silver tap px-4 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
             >
               Annuler
             </button>
             <button
               onClick={submitFriend}
               disabled={!fName.trim()}
-              className="rounded-xl bg-brand px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-xl bg-brand tap px-5 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean disabled:cursor-not-allowed disabled:opacity-40"
             >
               Ajouter
             </button>

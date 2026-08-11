@@ -44,7 +44,7 @@ export default function RelationClient({ userId }: { userId: ID }) {
           action={
             <Link
               href="/"
-              className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
+              className="rounded-xl bg-brand tap px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
             >
               Retour a l&apos;accueil
             </Link>
@@ -75,9 +75,9 @@ export default function RelationClient({ userId }: { userId: ID }) {
           <Link
             href="/"
             aria-label="Retour"
-            className="rounded-xl p-2 text-navy/45 transition-colors hover:bg-white/50 hover:text-navy lg:hidden"
+            className="tap -ml-2 flex items-center justify-center rounded-xl text-navy/45 transition-colors hover:bg-white/50 hover:text-navy lg:hidden"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={20} />
           </Link>
         }
         title={
@@ -90,14 +90,14 @@ export default function RelationClient({ userId }: { userId: ID }) {
         action={
           <button
             onClick={reminder}
-            className="hidden items-center gap-1.5 rounded-xl border border-silver px-3 py-2 text-xs font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy sm:flex"
+            className="tap hidden items-center gap-1.5 rounded-xl border border-silver px-3 text-xs font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy sm:flex"
           >
             <MessageCircle size={14} /> Rappel
           </button>
         }
       />
 
-      <motion.div {...pageIn} className="space-y-4 p-6 pb-40">
+      <motion.div {...pageIn} className="safe-x space-y-4 p-6 pb-40">
         {/* Actions rapides */}
         <div className="grid grid-cols-2 gap-3">
           <motion.button
@@ -217,8 +217,8 @@ export default function RelationClient({ userId }: { userId: ID }) {
         )}
       </motion.div>
 
-      {/* Solde net sticky */}
-      <div className="fixed inset-x-0 bottom-16 z-20 px-4 pb-3 lg:bottom-0 lg:left-56 lg:px-6 lg:pb-6">
+      {/* Solde net sticky — toujours au-dessus de la barre de navigation */}
+      <div className="above-nav safe-x fixed inset-x-0 z-20 px-4 pb-3 lg:left-56 lg:px-6 lg:pb-6">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}

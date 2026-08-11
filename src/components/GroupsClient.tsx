@@ -57,14 +57,14 @@ export default function GroupsClient() {
         action={
           <button
             onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
+            className="tap flex shrink-0 items-center gap-1.5 rounded-xl bg-brand px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
           >
             <Plus size={16} /> Groupe
           </button>
         }
       />
 
-      <motion.div {...pageIn} className="p-6">
+      <motion.div {...pageIn} className="safe-x p-6">
         {state.groups.length === 0 ? (
           <EmptyState
             icon={UsersRound}
@@ -141,7 +141,7 @@ export default function GroupsClient() {
                   setSimplifyOpen(group.id)
                   setOpenGroup(null)
                 }}
-                className="flex items-center gap-1.5 rounded-xl border border-silver px-3 py-2 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
+                className="flex items-center gap-1.5 rounded-xl border border-silver tap px-3 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
               >
                 <Wand2 size={15} /> Simplifier
               </button>
@@ -150,7 +150,7 @@ export default function GroupsClient() {
                   setExpenseGroup(group.id)
                   setOpenGroup(null)
                 }}
-                className="ml-auto flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
+                className="ml-auto flex items-center gap-1.5 rounded-xl bg-brand tap px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
               >
                 <Plus size={15} /> Depense
               </button>
@@ -218,7 +218,7 @@ export default function GroupsClient() {
           <div className="flex items-center justify-end gap-3">
             <button
               onClick={() => setSimplifyOpen(null)}
-              className="rounded-xl border border-silver px-4 py-2 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
+              className="rounded-xl border border-silver tap px-4 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
             >
               Fermer
             </button>
@@ -227,7 +227,7 @@ export default function GroupsClient() {
                 toast('Suggestion notee — rien n’a ete applique', 'info')
                 setSimplifyOpen(null)
               }}
-              className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
+              className="rounded-xl bg-brand tap px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
             >
               Garder en note
             </button>
@@ -273,14 +273,14 @@ export default function GroupsClient() {
           <div className="flex items-center justify-end gap-3">
             <button
               onClick={() => setCreateOpen(false)}
-              className="rounded-xl border border-silver px-4 py-2 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
+              className="rounded-xl border border-silver tap px-4 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
             >
               Annuler
             </button>
             <button
               onClick={submitGroup}
               disabled={!name.trim()}
-              className="rounded-xl bg-brand px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-xl bg-brand tap px-5 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean disabled:cursor-not-allowed disabled:opacity-40"
             >
               Creer
             </button>

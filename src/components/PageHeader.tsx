@@ -12,7 +12,7 @@ export default function PageHeader({
   leading?: ReactNode
 }) {
   return (
-    <header className="sticky top-0 z-20 border-b border-white/50 bg-white/20 px-6 py-5 backdrop-blur-sm">
+    <header className="safe-top safe-x sticky top-0 z-20 border-b border-white/50 bg-white/20 px-4 pb-4 backdrop-blur-sm sm:px-6">
       <div className="flex items-center gap-3">
         {leading}
         <div className="min-w-0 flex-1">

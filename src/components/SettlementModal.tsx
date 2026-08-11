@@ -69,14 +69,14 @@ export default function SettlementModal({
         <div className="flex items-center justify-end gap-3">
           <button
             onClick={onClose}
-            className="rounded-xl border border-silver px-4 py-2 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
+            className="rounded-xl border border-silver tap px-4 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
           >
             Annuler
           </button>
           <button
             onClick={submit}
             disabled={!canSubmit}
-            className="rounded-xl bg-brand px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-xl bg-brand tap px-5 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean disabled:cursor-not-allowed disabled:opacity-40"
           >
             Enregistrer
           </button>

@@ -10,14 +10,14 @@ export default function BottomNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="glass-nav fixed inset-x-0 bottom-0 z-30 flex h-16 items-stretch lg:hidden">
+    <nav className="glass-nav safe-bottom safe-x fixed inset-x-0 bottom-0 z-30 flex items-stretch lg:hidden">
       {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
         const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
         return (
           <Link
             key={href}
             href={href}
-            className="relative flex flex-1 flex-col items-center justify-center gap-1"
+            className="relative flex h-16 flex-1 flex-col items-center justify-center gap-1"
           >
             {active && (
               <motion.span

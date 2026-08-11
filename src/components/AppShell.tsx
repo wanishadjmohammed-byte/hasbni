@@ -46,7 +46,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <BottomNav />
       <Toasts />
       <PWAManager />
-      <main className="relative z-10 min-h-screen pb-16 lg:pb-0 lg:pl-56">
+      <main className="pad-nav relative z-10 min-h-screen lg:pl-56">
         {profileMissing ? (
           <div className="flex min-h-screen items-center justify-center p-6">
             <div className="glass w-full max-w-sm rounded-2xl p-6 text-center">
@@ -61,13 +61,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
               <div className="mt-4 flex gap-2">
                 <button
                   onClick={() => window.location.reload()}
-                  className="flex-1 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
+                  className="flex-1 rounded-xl bg-brand tap px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
                 >
                   Reessayer
                 </button>
                 <button
                   onClick={() => void signOut()}
-                  className="rounded-xl border border-silver px-4 py-2 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
+                  className="rounded-xl border border-silver tap px-4 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
                 >
                   Deconnexion
                 </button>

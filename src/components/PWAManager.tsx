@@ -63,7 +63,8 @@ export default function PWAManager() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ type: 'spring' as const, stiffness: 420, damping: 30 }}
-            className="fixed inset-x-0 top-3 z-[55] flex justify-center px-4 lg:left-56"
+            style={{ top: 'calc(var(--safe-top) + 0.75rem)' }}
+            className="fixed inset-x-0 z-[55] flex justify-center px-4 lg:left-56"
           >
             <div className="glass flex items-center gap-2 rounded-full px-4 py-2">
               {syncStatus === 'offline' ? (
@@ -95,7 +96,8 @@ export default function PWAManager() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             transition={{ type: 'spring' as const, stiffness: 340, damping: 28 }}
-            className="fixed inset-x-4 bottom-24 z-[55] mx-auto max-w-sm lg:left-auto lg:right-6 lg:bottom-6"
+            style={{ bottom: 'calc(var(--nav-height) + var(--safe-bottom) + 1rem)' }}
+            className="fixed inset-x-4 z-[55] mx-auto max-w-sm lg:!bottom-6 lg:left-auto lg:right-6"
           >
             <div className="glass flex items-center gap-3 rounded-2xl p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/10 text-brand">

@@ -41,7 +41,7 @@ export default function Modal({
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-6">
+        <div className="safe-x fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
           <motion.div
             {...backdropIn}
             onClick={onClose}
@@ -52,9 +52,16 @@ export default function Modal({
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            className={`glass relative z-10 w-full ${maxWidth} max-h-[92vh] overflow-hidden rounded-t-3xl sm:rounded-2xl`}
+            /* `dvh` suit la hauteur reelle du viewport quand la barre d'URL
+               mobile se retracte — `vh` deborderait sous l'ecran. */
+            className={`glass relative z-10 flex w-full ${maxWidth} max-h-[90dvh] flex-col overflow-hidden rounded-t-3xl sm:max-h-[85dvh] sm:rounded-2xl`}
           >
-            <div className="flex items-start gap-3 border-b border-white/50 bg-white/20 px-5 py-4 backdrop-blur-sm">
+            {/* Poignee : repere visuel de feuille glissante sur mobile */}
+            <div className="flex justify-center pt-2 sm:hidden">
+              <span className="h-1 w-9 rounded-full bg-navy/15" />
+            </div>
+
+            <div className="flex items-start gap-3 border-b border-white/50 bg-white/20 px-5 py-3.5 backdrop-blur-sm sm:py-4">
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-base font-bold text-navy">{title}</h2>
                 {subtitle && <p className="mt-0.5 text-xs font-medium text-navy/50">{subtitle}</p>}
@@ -62,16 +69,16 @@ export default function Modal({
               <button
                 onClick={onClose}
                 aria-label="Fermer"
-                className="rounded-xl p-1.5 text-navy/45 transition-colors hover:bg-white/50 hover:text-navy"
+                className="tap -mr-1.5 flex items-center justify-center rounded-xl text-navy/45 transition-colors hover:bg-white/50 hover:text-navy"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            <div className="max-h-[62vh] overflow-y-auto px-5 py-4">{children}</div>
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
 
             {footer && (
-              <div className="border-t border-white/50 bg-white/25 px-5 py-3.5 backdrop-blur-sm">
+              <div className="safe-bottom-plus border-t border-white/50 bg-white/25 px-5 pt-3.5 backdrop-blur-sm">
                 {footer}
               </div>
             )}
