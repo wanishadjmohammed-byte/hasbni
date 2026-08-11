@@ -12,6 +12,7 @@ export type ProfileRow = {
   avatar: string | null
   color: string | null
   created_by: string | null
+  claim_token: string
   created_at: string
 }
 

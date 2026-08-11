@@ -15,6 +15,8 @@ export interface User {
   color?: string // teinte de l'avatar
   /** Profil « fantome » cree par un autre user, en attendant son inscription. */
   createdBy?: ID
+  /** Jeton du lien d'invitation, tant que le profil n'est pas reclame. */
+  claimToken?: string
 }
 
 export interface Group {

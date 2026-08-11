@@ -57,6 +57,7 @@ export async function fetchState(sb: SB, profileId: ID): Promise<AppState> {
       avatar: p.avatar ?? undefined,
       color: p.color ?? undefined,
       createdBy: p.created_by ?? undefined,
+      claimToken: p.claim_token ?? undefined,
     })),
     groups: (groups.data ?? []).map((g) => ({
       id: g.id,
@@ -191,10 +192,12 @@ export async function pushOp(sb: SB, profileId: ID, op: Op): Promise<void> {
           id: op.user.id,
           user_id: null,
           name: op.user.name,
+          email: op.user.email ?? null,
           phone: op.user.phone ?? null,
           avatar: op.user.avatar ?? null,
           color: op.user.color ?? null,
           created_by: profileId,
+          claim_token: op.user.claimToken,
         },
         { onConflict: 'id', ignoreDuplicates: true }
       )

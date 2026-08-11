@@ -20,11 +20,14 @@ create table if not exists public.profiles (
   avatar      text default '🙂',
   color       text default '#22A06B',
   created_by  uuid references public.profiles (id) on delete set null,
+  claim_token uuid not null default gen_random_uuid(),
   created_at  timestamptz not null default now()
 );
 
 create index if not exists profiles_user_id_idx on public.profiles (user_id);
 create index if not exists profiles_created_by_idx on public.profiles (created_by);
+create index if not exists profiles_claim_token_idx on public.profiles (claim_token);
+create index if not exists profiles_email_idx on public.profiles (lower(email));
 
 -- ────────────────────────────────────────────────────────────────────────────
 --  Groupes
@@ -155,6 +158,16 @@ as $$
   );
 $$;
 
+create or replace function public.is_group_owner(gid uuid, pid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from public.groups g where g.id = gid and g.owner_id = pid);
+$$;
+
 -- Deux profils sont « lies » s'ils partagent un groupe, une depense, un
 -- remboursement, ou si l'un a cree l'autre.
 create or replace function public.shares_context(a uuid, b uuid)
@@ -197,25 +210,102 @@ $$;
 --  Triggers metier
 -- ============================================================================
 
--- Creation automatique du profil a l'inscription.
+-- Creation du profil a l'inscription. Si un pote a deja ajoute cet email,
+-- on rattache le profil « fantome » existant au lieu d'en creer un nouveau :
+-- le nouvel inscrit recupere ainsi tout l'historique deja saisi.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  ghost_id uuid;
+  fallback_name text;
 begin
-  insert into public.profiles (user_id, name, phone, email)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data ->> 'name', split_part(coalesce(new.email, 'Pote'), '@', 1)),
-    new.phone,
-    new.email
-  )
-  on conflict (user_id) do nothing;
+  fallback_name := coalesce(
+    new.raw_user_meta_data ->> 'name',
+    split_part(coalesce(new.email, 'Pote'), '@', 1)
+  );
+
+  select id into ghost_id
+    from public.profiles
+   where user_id is null
+     and email is not null
+     and new.email is not null
+     and lower(email) = lower(new.email)
+   order by created_at
+   limit 1;
+
+  if ghost_id is not null then
+    update public.profiles
+       set user_id = new.id,
+           name    = coalesce(nullif(fallback_name, ''), name),
+           phone   = coalesce(phone, new.phone)
+     where id = ghost_id;
+  else
+    insert into public.profiles (user_id, name, phone, email)
+    values (new.id, fallback_name, new.phone, new.email)
+    on conflict (user_id) do nothing;
+  end if;
+
   return new;
 end;
 $$;
+
+-- Acceptation d'une invitation via son lien : l'appelant reclame le profil
+-- fantome correspondant au jeton.
+create or replace function public.claim_profile(token uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_id uuid;
+  own_id    uuid;
+  busy      boolean;
+begin
+  if auth.uid() is null then
+    raise exception 'Connecte-toi pour accepter une invitation';
+  end if;
+
+  select id into target_id
+    from public.profiles
+   where claim_token = token and user_id is null;
+
+  if target_id is null then
+    raise exception 'Invitation invalide ou deja utilisee';
+  end if;
+
+  select id into own_id from public.profiles where user_id = auth.uid();
+
+  if own_id is not null then
+    if own_id = target_id then
+      return own_id;
+    end if;
+
+    select exists (
+      select 1 from public.ledger_entries where user_a = own_id or user_b = own_id
+    ) into busy;
+
+    if busy then
+      raise exception 'Ton compte a deja des mouvements : impossible de le fusionner avec cette invitation';
+    end if;
+
+    delete from public.profiles where id = own_id;
+  end if;
+
+  update public.profiles
+     set user_id = auth.uid(),
+         email   = coalesce(email, (select email from auth.users where id = auth.uid()))
+   where id = target_id;
+
+  return target_id;
+end;
+$$;
+
+grant execute on function public.claim_profile(uuid) to authenticated;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
@@ -365,7 +455,10 @@ alter table public.audit_log          enable row level security;
 -- Profils ------------------------------------------------------------------
 drop policy if exists profiles_select on public.profiles;
 create policy profiles_select on public.profiles for select to authenticated
-  using (public.shares_context(public.current_profile_id(), id));
+  using (
+    public.shares_context(public.current_profile_id(), id)
+    or created_by = public.current_profile_id()
+  );
 
 drop policy if exists profiles_insert on public.profiles;
 create policy profiles_insert on public.profiles for insert to authenticated
@@ -379,7 +472,10 @@ create policy profiles_update on public.profiles for update to authenticated
 -- Groupes ------------------------------------------------------------------
 drop policy if exists groups_select on public.groups;
 create policy groups_select on public.groups for select to authenticated
-  using (public.is_group_member(id, public.current_profile_id()));
+  using (
+    owner_id = public.current_profile_id()
+    or public.is_group_member(id, public.current_profile_id())
+  );
 
 drop policy if exists groups_insert on public.groups;
 create policy groups_insert on public.groups for insert to authenticated
@@ -397,9 +493,15 @@ create policy group_members_select on public.group_members for select to authent
 drop policy if exists group_members_insert on public.group_members;
 create policy group_members_insert on public.group_members for insert to authenticated
   with check (
-    exists (select 1 from public.groups g
-            where g.id = group_id and g.owner_id = public.current_profile_id())
+    public.is_group_owner(group_id, public.current_profile_id())
     or public.is_group_member(group_id, public.current_profile_id())
+  );
+
+drop policy if exists group_members_delete on public.group_members;
+create policy group_members_delete on public.group_members for delete to authenticated
+  using (
+    public.is_group_owner(group_id, public.current_profile_id())
+    or user_id = public.current_profile_id()
   );
 
 -- Depenses -----------------------------------------------------------------

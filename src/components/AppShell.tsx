@@ -12,7 +12,7 @@ import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
 
 /** Ecrans plein ecran, sans navigation. */
-const BARE_ROUTES = ['/login', '/offline']
+const BARE_ROUTES = ['/login', '/offline', '/invite']
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()

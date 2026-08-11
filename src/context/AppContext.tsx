@@ -74,7 +74,7 @@ interface AppContextValue {
   confirmSettlement: (id: ID) => void
   /** Annulation par mouvement inverse — jamais de suppression physique (CDC 3). */
   cancelMovement: (kind: 'expense' | 'settlement', id: ID) => void
-  addFriend: (name: string, phone: string, avatar: string) => User
+  addFriend: (input: { name: string; email: string; phone: string; avatar: string }) => User
   createGroup: (name: string, emoji: string, memberIds: ID[]) => Group
   updateProfile: (patch: Partial<Pick<User, 'name' | 'phone' | 'email' | 'avatar'>>) => void
   refresh: () => Promise<void>
@@ -314,8 +314,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const addFriend = useCallback(
-    (name: string, phone: string, avatar: string) => {
-      const op = buildFriendOp(name, phone, avatar, currentId)
+    (input: { name: string; email: string; phone: string; avatar: string }) => {
+      const op = buildFriendOp(input, currentId)
       dispatch(op)
       return (op as Extract<Op, { kind: 'friend.add' }>).user
     },

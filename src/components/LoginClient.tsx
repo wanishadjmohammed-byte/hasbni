@@ -3,7 +3,7 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, Eye, EyeOff, Loader2, MailCheck } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { listItemY, listParent, pageIn } from '@/lib/motion'
@@ -12,6 +12,9 @@ type Tab = 'signin' | 'signup'
 
 export default function LoginClient() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  // Redirection apres connexion : sert au parcours d'invitation.
+  const next = searchParams.get('next') || '/'
   const { mode, signedIn, signIn, signUp } = useAuth()
 
   const [tab, setTab] = useState<Tab>('signin')
@@ -24,8 +27,8 @@ export default function LoginClient() {
   const [confirmSent, setConfirmSent] = useState(false)
 
   useEffect(() => {
-    if (signedIn && mode === 'supabase') router.replace('/')
-  }, [signedIn, mode, router])
+    if (signedIn && mode === 'supabase') router.replace(next)
+  }, [signedIn, mode, router, next])
 
   const valid =
     mode === 'demo' ||
@@ -38,7 +41,7 @@ export default function LoginClient() {
 
     // Mode demonstration : pas de backend, on entre directement.
     if (mode === 'demo') {
-      router.push('/')
+      router.push(next)
       return
     }
     if (!valid || busy) return
@@ -54,7 +57,7 @@ export default function LoginClient() {
       } else {
         await signIn(email, password)
       }
-      router.replace('/')
+      router.replace(next)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Une erreur est survenue')
     } finally {
@@ -62,8 +65,8 @@ export default function LoginClient() {
     }
   }
 
-  const switchTab = (next: Tab) => {
-    setTab(next)
+  const switchTab = (target: Tab) => {
+    setTab(target)
     setError(null)
     setConfirmSent(false)
   }

@@ -182,14 +182,21 @@ export function buildCancelOp(
   return { kind: 'movement.cancel', target, id, inverse }
 }
 
-export function buildFriendOp(name: string, phone: string, avatar: string, createdBy: ID): Op {
+export function buildFriendOp(
+  input: { name: string; email: string; phone: string; avatar: string },
+  createdBy: ID
+): Op {
   const user: User = {
     id: uid('u'),
-    name: name.trim(),
-    phone: phone.trim() || undefined,
-    avatar: avatar || '🙂',
+    name: input.name.trim(),
+    email: input.email.trim().toLowerCase() || undefined,
+    phone: input.phone.trim() || undefined,
+    avatar: input.avatar || '🙂',
     color: '#22A06B',
     createdBy,
+    // Genere ici pour que le lien d'invitation soit affichable immediatement,
+    // meme hors ligne.
+    claimToken: uid('tok'),
   }
   return { kind: 'friend.add', user }
 }
