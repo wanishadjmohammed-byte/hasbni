@@ -456,8 +456,16 @@ alter table public.audit_log          enable row level security;
 drop policy if exists profiles_select on public.profiles;
 create policy profiles_select on public.profiles for select to authenticated
   using (
-    public.shares_context(public.current_profile_id(), id)
-    or created_by = public.current_profile_id()
+    public.shares_context(public.current_profile_id(), public.profiles.id)
+    or exists (
+      select 1
+        from public.friend_requests r
+       where r.status = 'pending'
+         and (
+           (r.from_user = public.current_profile_id() and r.to_user = public.profiles.id)
+           or (r.to_user = public.current_profile_id() and r.from_user = public.profiles.id)
+         )
+    )
   );
 
 drop policy if exists profiles_insert on public.profiles;

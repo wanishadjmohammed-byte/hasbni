@@ -123,15 +123,24 @@ export function friendIds(state: AppState): ID[] {
     .filter((id): id is ID => Boolean(id))
 }
 
-/** Demandes de pote recues en attente de reponse. */
+/**
+ * Demandes de pote recues en attente de reponse.
+ * Si le profil du demandeur n'est pas visible, on affiche quand meme la
+ * demande avec un libelle generique : une action en attente ne doit jamais
+ * disparaitre silencieusement de l'interface.
+ */
 export function incomingRequests(state: AppState) {
   const me = state.currentUserId
   return state.friendRequests
     .filter((r) => r.toUser === me && r.status === 'pending')
-    .map((r) => ({ request: r, user: state.users.find((u) => u.id === r.fromUser) }))
-    .filter((x): x is { request: (typeof state.friendRequests)[number]; user: User } =>
-      Boolean(x.user)
-    )
+    .map((r) => ({
+      request: r,
+      user: state.users.find((u) => u.id === r.fromUser) ?? {
+        id: r.fromUser,
+        name: 'Un pote',
+        avatar: '🙂',
+      },
+    }))
 }
 
 /** Demandes envoyees, toujours sans reponse. */
@@ -139,10 +148,14 @@ export function outgoingRequests(state: AppState) {
   const me = state.currentUserId
   return state.friendRequests
     .filter((r) => r.fromUser === me && r.status === 'pending')
-    .map((r) => ({ request: r, user: state.users.find((u) => u.id === r.toUser) }))
-    .filter((x): x is { request: (typeof state.friendRequests)[number]; user: User } =>
-      Boolean(x.user)
-    )
+    .map((r) => ({
+      request: r,
+      user: state.users.find((u) => u.id === r.toUser) ?? {
+        id: r.toUser,
+        name: 'Invitation envoyee',
+        avatar: '🙂',
+      },
+    }))
 }
 
 /**
