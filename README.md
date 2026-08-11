@@ -57,8 +57,8 @@ suppression physique), DA arrondi a l'unite, reste d'arrondi au payeur.
 - `src/lib/ops.ts` — **toute mutation est une operation serialisable** (`Op`) appliquee par un
   reducteur pur. C'est ce qui rend la saisie hors ligne possible : meme fonction pour l'etat
   optimiste local et pour le rejeu.
-- `src/context/AuthContext.tsx` — session Supabase (OTP email/telephone), resolution du profil.
-- `src/context/AppContext.tsx` — etat, file de synchronisation, temps reel, notifications.
+- `src/context/AuthContext.tsx` — session Supabase (email + mot de passe), resolution du profil.
+- `src/context/AppContext.tsx` — etat, file de synchronisation, temps reel.
 
 ### Backend (`supabase/schema.sql`)
 
