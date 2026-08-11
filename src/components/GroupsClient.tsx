@@ -64,7 +64,7 @@ export default function GroupsClient() {
         }
       />
 
-      <motion.div {...pageIn} className="safe-x p-6">
+      <motion.div {...pageIn} className="p-6">
         {state.groups.length === 0 ? (
           <EmptyState
             icon={UsersRound}

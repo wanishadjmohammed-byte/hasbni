@@ -38,7 +38,7 @@ export default function ActivityClient() {
     <>
       <PageHeader title="Activite" subtitle="Tous les mouvements, tous potes confondus" />
 
-      <motion.div {...pageIn} className="safe-x space-y-4 p-6">
+      <motion.div {...pageIn} className="space-y-4 p-6">
         {/* A confirmer */}
         {pending.length > 0 && (
           <div className="space-y-2">

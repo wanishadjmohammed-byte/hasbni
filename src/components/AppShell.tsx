@@ -47,43 +47,48 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <Toasts />
       <PWAManager />
       <main className="pad-nav relative z-10 min-h-screen lg:pl-56">
-        {profileMissing ? (
-          <div className="flex min-h-screen items-center justify-center p-6">
-            <div className="glass w-full max-w-sm rounded-2xl p-6 text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-cream text-navy/60">
-                <AlertTriangle size={22} />
-              </div>
-              <p className="text-sm font-bold text-navy">Profil introuvable</p>
-              <p className="mt-1 text-xs font-medium text-navy/45">
-                Ton compte existe, mais aucune ligne dans <code>profiles</code>. Le fichier
-                <code> supabase/schema.sql</code> a-t-il bien ete execute dans l&apos;editeur SQL ?
-              </p>
-              <div className="mt-4 flex gap-2">
-                <button
-                  onClick={() => window.location.reload()}
-                  className="flex-1 rounded-xl bg-brand tap px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
-                >
-                  Reessayer
-                </button>
-                <button
-                  onClick={() => void signOut()}
-                  className="rounded-xl border border-silver tap px-4 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
-                >
-                  Deconnexion
-                </button>
+        {/* `safe-x` vit sur ce conteneur sans padding propre : il ajoute les
+            encoches sans ecraser ni le px-* des enfants, ni le lg:pl-56. */}
+        <div className="safe-x">
+          {profileMissing ? (
+            <div className="flex min-h-screen items-center justify-center p-6">
+              <div className="glass w-full max-w-sm rounded-2xl p-6 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-cream text-navy/60">
+                  <AlertTriangle size={22} />
+                </div>
+                <p className="text-sm font-bold text-navy">Profil introuvable</p>
+                <p className="mt-1 text-xs font-medium text-navy/45">
+                  Ton compte existe, mais aucune ligne dans <code>profiles</code>. Le fichier
+                  <code> supabase/schema.sql</code> a-t-il bien ete execute dans l&apos;editeur
+                  SQL ?
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="tap flex-1 rounded-xl bg-brand px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
+                  >
+                    Reessayer
+                  </button>
+                  <button
+                    onClick={() => void signOut()}
+                    className="tap rounded-xl border border-silver px-4 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
+                  >
+                    Deconnexion
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ) : blocked ? (
-          <div className="flex min-h-screen items-center justify-center">
-            <div className="glass flex items-center gap-3 rounded-2xl px-5 py-4">
-              <Loader2 size={18} className="animate-spin text-brand" />
-              <span className="text-sm font-semibold text-navy">Chargement de tes comptes…</span>
+          ) : blocked ? (
+            <div className="flex min-h-screen items-center justify-center">
+              <div className="glass flex items-center gap-3 rounded-2xl px-5 py-4">
+                <Loader2 size={18} className="animate-spin text-brand" />
+                <span className="text-sm font-semibold text-navy">Chargement de tes comptes…</span>
+              </div>
             </div>
-          </div>
-        ) : (
-          children
-        )}
+          ) : (
+            children
+          )}
+        </div>
       </main>
     </>
   )

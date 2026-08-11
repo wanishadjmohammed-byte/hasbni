@@ -76,7 +76,7 @@ export default function ProfileClient() {
         }
       />
 
-      <motion.div {...pageIn} className="safe-x space-y-4 p-6">
+      <motion.div {...pageIn} className="space-y-4 p-6">
         <div className="glass rounded-2xl p-4">
           <div className="flex items-center gap-3">
             <Avatar user={{ name, avatar, color: me.color }} size="xl" />

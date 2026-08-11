@@ -49,14 +49,14 @@ export default function HomeClient() {
         action={
           <button
             onClick={() => setExpenseOpen(true)}
-            className="tap hidden items-center gap-1.5 rounded-xl bg-brand px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean sm:flex"
+            className="hidden items-center gap-1.5 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean sm:flex"
           >
             <Plus size={16} /> Depense
           </button>
         }
       />
 
-      <motion.div {...pageIn} className="safe-x space-y-5 p-6">
+      <motion.div {...pageIn} className="space-y-5 p-6">
         {/* Totaux globaux */}
         <motion.div variants={listParent} initial="hidden" animate="show" className="grid gap-3 sm:grid-cols-3">
           <motion.div variants={listItemY} {...cardHover} className="glass rounded-2xl p-4">

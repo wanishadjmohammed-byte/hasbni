@@ -2,7 +2,8 @@
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { backdropIn, modalIn } from '@/lib/motion'
 
 export default function Modal({
@@ -22,6 +23,11 @@ export default function Modal({
   footer?: ReactNode
   size?: 'sm' | 'md' | 'lg'
 }) {
+  // `<main>` porte un `z-10` : il cree un contexte d'empilement dont un enfant
+  // ne peut jamais sortir, meme en z-50. On rend donc la modale dans <body>.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -38,10 +44,12 @@ export default function Modal({
 
   const maxWidth = size === 'sm' ? 'max-w-sm' : size === 'lg' ? 'max-w-2xl' : 'max-w-md'
 
-  return (
+  if (!mounted) return null
+
+  return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="safe-x fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
+        <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-6">
           <motion.div
             {...backdropIn}
             onClick={onClose}
@@ -85,6 +93,7 @@ export default function Modal({
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }

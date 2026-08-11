@@ -38,6 +38,9 @@
   padding-bottom: calc(var(--safe-bottom) + 0.875rem);
 }
 
+/* A n'appliquer QUE sur un conteneur sans padding horizontal propre :
+   cette regle est declaree apres les utilitaires Tailwind, donc elle
+   ecraserait un px-* pose sur le meme element. */
 .safe-x {
   padding-left: var(--safe-left);
   padding-right: var(--safe-right);
