@@ -10,6 +10,15 @@ export class PermanentSyncError extends Error {}
 
 const RETRYABLE_CODES = new Set(['08000', '08006', '08003', '57014', '40001', '40P01'])
 
+/**
+ * La fonction SQL n'existe pas encore dans ce projet (patch non applique).
+ * On sait alors retomber sur le chemin equivalent en requetes directes.
+ */
+function isMissingFunction(error: { code?: string; message: string } | null): boolean {
+  if (!error) return false
+  return error.code === 'PGRST202' || /could not find the function/i.test(error.message)
+}
+
 function classify(error: { code?: string; message: string } | null): void {
   if (!error) return
   if (error.code && RETRYABLE_CODES.has(error.code)) throw new Error(error.message)
@@ -229,15 +238,38 @@ export async function pushOp(sb: SB, profileId: ID, op: Op): Promise<void> {
     }
 
     case 'group.create': {
-      // Une seule transaction cote serveur : le groupe et ses membres sont
-      // crees ensemble, jamais l'un sans l'autre.
+      // Chemin nominal : une transaction serveur cree le groupe ET ses membres.
       const { error } = await sb.rpc('create_group', {
         p_name: op.group.name,
         p_emoji: op.group.emoji,
         p_member_ids: op.memberIds.filter((id) => id !== profileId),
         p_group_id: op.group.id,
       })
-      classifyIfError(error)
+      if (!error) return
+      if (!isMissingFunction(error)) {
+        classifyIfError(error)
+        return
+      }
+
+      // Repli pour un projet ou le patch 04 n'a pas encore ete applique.
+      const { error: groupError } = await sb.from('groups').upsert(
+        {
+          id: op.group.id,
+          name: op.group.name,
+          emoji: op.group.emoji,
+          owner_id: profileId,
+          created_at: op.group.createdAt,
+        },
+        { onConflict: 'id', ignoreDuplicates: true }
+      )
+      classifyIfError(groupError)
+
+      const ids = Array.from(new Set([profileId, ...op.memberIds]))
+      const { error: memberError } = await sb.from('group_members').upsert(
+        ids.map((userId) => ({ group_id: op.group.id, user_id: userId })),
+        { onConflict: 'group_id,user_id', ignoreDuplicates: true }
+      )
+      classifyIfError(memberError)
       return
     }
 
@@ -246,7 +278,20 @@ export async function pushOp(sb: SB, profileId: ID, op: Op): Promise<void> {
         p_group_id: op.groupId,
         p_user_id: op.userId,
       })
-      classifyIfError(error)
+      if (!error) return
+      if (!isMissingFunction(error)) {
+        classifyIfError(error)
+        return
+      }
+
+      // Repli : la politique group_members_insert autorise deja tout membre.
+      const { error: directError } = await sb
+        .from('group_members')
+        .upsert({ group_id: op.groupId, user_id: op.userId }, {
+          onConflict: 'group_id,user_id',
+          ignoreDuplicates: true,
+        })
+      classifyIfError(directError)
       return
     }
 
