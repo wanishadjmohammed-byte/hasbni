@@ -2,7 +2,7 @@
 
 import clsx from 'clsx'
 import { motion } from 'framer-motion'
-import { Activity, Banknote, Check, Clock3, Landmark, Receipt } from 'lucide-react'
+import { Activity, Banknote, Check, Clock3, Landmark, Receipt, UserPlus, X } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
 import Avatar from './Avatar'
@@ -10,7 +10,13 @@ import EmptyState from './EmptyState'
 import PageHeader from './PageHeader'
 import { useApp } from '@/context/AppContext'
 import { relativeDate } from '@/lib/date'
-import { allMovements, formatAmount, pendingForMe, userById } from '@/lib/ledger'
+import {
+  allMovements,
+  formatAmount,
+  incomingRequests,
+  pendingForMe,
+  userById,
+} from '@/lib/ledger'
 import { cardHover, listItemY, listParent, pageIn } from '@/lib/motion'
 
 type Filter = 'all' | 'pending' | 'expenses' | 'settlements'
@@ -23,10 +29,24 @@ const FILTERS: { key: Filter; label: string }[] = [
 ]
 
 export default function ActivityClient() {
-  const { state, me, confirmSettlement, toast } = useApp()
+  const { state, me, confirmSettlement, respondToRequest, toast } = useApp()
   const [filter, setFilter] = useState<Filter>('all')
+  const [busyRequest, setBusyRequest] = useState<string | null>(null)
 
   const pending = pendingForMe(state)
+  const requests = incomingRequests(state)
+
+  const answer = async (id: string, accept: boolean, name: string) => {
+    setBusyRequest(id)
+    try {
+      await respondToRequest(id, accept)
+      toast(accept ? `${name} est maintenant ton pote` : 'Demande refusee', accept ? 'success' : 'info')
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Erreur', 'danger')
+    } finally {
+      setBusyRequest(null)
+    }
+  }
   const movements = allMovements(state).filter((m) => {
     if (filter === 'pending') return m.status === 'pending'
     if (filter === 'expenses') return m.kind === 'expense'
@@ -39,6 +59,43 @@ export default function ActivityClient() {
       <PageHeader title="Activite" subtitle="Tous les mouvements, tous potes confondus" />
 
       <motion.div {...pageIn} className="space-y-4 p-6">
+        {/* Demandes de pote */}
+        {requests.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-navy/50">Demandes de pote</p>
+            {requests.map(({ request, user }) => (
+              <motion.div key={request.id} {...cardHover} className="glass rounded-2xl p-4">
+                <div className="flex items-center gap-3">
+                  <Avatar user={user} size="md" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-navy">
+                      {user.name} veut etre ton pote
+                    </p>
+                    <p className="truncate text-xs font-medium text-navy/45">
+                      {user.email ?? 'compte Hasbni'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => void answer(request.id, false, user.name)}
+                    disabled={busyRequest === request.id}
+                    aria-label="Refuser"
+                    className="tap rounded-xl border border-silver px-3 text-xs font-semibold text-navy/45 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+                  >
+                    <X size={15} />
+                  </button>
+                  <button
+                    onClick={() => void answer(request.id, true, user.name)}
+                    disabled={busyRequest === request.id}
+                    className="tap gap-1.5 rounded-xl bg-brand px-3 text-xs font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean disabled:opacity-40"
+                  >
+                    <UserPlus size={14} /> Accepter
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
         {/* A confirmer */}
         {pending.length > 0 && (
           <div className="space-y-2">

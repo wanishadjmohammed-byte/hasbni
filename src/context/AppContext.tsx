@@ -24,7 +24,6 @@ import {
   applyOp,
   buildCancelOp,
   buildExpenseOp,
-  buildFriendOp,
   buildGroupOp,
   buildSettlementOp,
   envelope,
@@ -32,7 +31,13 @@ import {
 } from '@/lib/ops'
 import { buildSeed } from '@/lib/seed'
 import { getSupabase, supabaseEnabled } from '@/lib/supabase/client'
-import { fetchState, PermanentSyncError, pushOp } from '@/lib/supabase/repo'
+import {
+  fetchState,
+  PermanentSyncError,
+  pushOp,
+  respondFriendRequest,
+  sendFriendRequest,
+} from '@/lib/supabase/repo'
 import type { AppState, Group, ID, SplitType, User } from '@/lib/types'
 
 const MAX_ATTEMPTS = 6
@@ -74,7 +79,9 @@ interface AppContextValue {
   confirmSettlement: (id: ID) => void
   /** Annulation par mouvement inverse — jamais de suppression physique (CDC 3). */
   cancelMovement: (kind: 'expense' | 'settlement', id: ID) => void
-  addFriend: (input: { name: string; email: string; phone: string; avatar: string }) => User
+  /** Demande de pote par email. Leve une erreur lisible si l'email est inconnu. */
+  addFriend: (email: string) => Promise<'sent' | 'accepted'>
+  respondToRequest: (requestId: ID, accept: boolean) => Promise<void>
   createGroup: (name: string, emoji: string, memberIds: ID[]) => Group
   updateProfile: (patch: Partial<Pick<User, 'name' | 'phone' | 'email' | 'avatar'>>) => void
   refresh: () => Promise<void>
@@ -95,6 +102,8 @@ const EMPTY_STATE: AppState = {
   expenseShares: [],
   settlements: [],
   ledger: [],
+  friendRequests: [],
+  friendships: [],
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -195,7 +204,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (error instanceof PermanentSyncError || item.attempts + 1 >= MAX_ATTEMPTS) {
             // Inutile d'insister : on retire l'operation et on previent.
             await dequeueOp(item.opId)
-            toast('Une operation n’a pas pu etre synchronisee', 'danger')
+            const detail = error instanceof Error ? error.message : ''
+            toast(detail ? `Refuse par le serveur : ${detail}` : 'Operation non synchronisee', 'danger')
             dirty = true
           } else {
             await bumpAttempts(item)
@@ -241,6 +251,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         void refresh()
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'settlements' }, () =>
+        void refresh()
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, () =>
+        void refresh()
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () =>
         void refresh()
       )
       .subscribe()
@@ -314,12 +330,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const addFriend = useCallback(
-    (input: { name: string; email: string; phone: string; avatar: string }) => {
-      const op = buildFriendOp(input, currentId)
-      dispatch(op)
-      return (op as Extract<Op, { kind: 'friend.add' }>).user
+    async (email: string) => {
+      const sb = getSupabase()
+      if (!sb || demo) {
+        throw new Error('Les demandes de pote necessitent un compte Supabase')
+      }
+      const result = await sendFriendRequest(sb, email)
+      await refresh()
+      return result
     },
-    [dispatch, currentId]
+    [demo, refresh]
+  )
+
+  const respondToRequest = useCallback(
+    async (requestId: ID, accept: boolean) => {
+      const sb = getSupabase()
+      if (!sb || demo) return
+      await respondFriendRequest(sb, requestId, accept)
+      await refresh()
+    },
+    [demo, refresh]
   )
 
   const createGroup = useCallback(
@@ -371,6 +401,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       confirmSettlement,
       cancelMovement,
       addFriend,
+      respondToRequest,
       createGroup,
       updateProfile,
       refresh,
@@ -394,6 +425,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       confirmSettlement,
       cancelMovement,
       addFriend,
+      respondToRequest,
       createGroup,
       updateProfile,
       refresh,

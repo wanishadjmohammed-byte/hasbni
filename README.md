@@ -22,6 +22,8 @@ Sans variables d'environnement, l'app tourne en **mode demonstration** : jeu de 
    `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Project Settings > API).
 4. Redemarrer `npm run dev` — les variables ne sont lues qu'au demarrage.
 
+Si le schema a deja ete execute, lancer aussi `supabase/patch-02-potes.sql`.
+
 L'authentification est **email + mot de passe** (provider Email, actif par defaut). Pour tester a
 plusieurs sans boite mail, desactiver **Authentication > Sign In / Providers > Email > Confirm
 email** : les comptes sont alors utilisables immediatement.
@@ -39,7 +41,7 @@ saisi a l'inscription.
 | Remboursement — saisie + confirmation bilaterale | modale | 2.5 |
 | Groupes — membres, soldes, bouton « Simplifier » | `/groupes` | 2.6 / 2.7 |
 | Activite — tous les mouvements, file de confirmation | `/activite` | — |
-| Profil — compte, potes, etat de synchro | `/profil` | — |
+| Profil — compte, potes, demande par email, etat de synchro | `/profil` | — |
 | Connexion / inscription — email + mot de passe | `/login` | 4 (flow 1) |
 
 Regles de gestion (CDC 3) : solde net sur mouvements confirmes, signe positif = l'autre me doit,
@@ -111,7 +113,5 @@ Animations : variantes partagees dans `src/lib/motion.ts`.
 
 ## Reste a faire
 
-- Invitations reelles (lien / contact) : un pote ajoute est aujourd'hui un profil « fantome »
-  cree par toi, pas encore rattache a son compte quand il s'inscrit.
 - Notifications push (CDC 5.1, V1.1) — retirees pour l'instant.
 - Points ouverts du CDC 8 : multi-devises, groupe sans compte, confidentialite intra-groupe.

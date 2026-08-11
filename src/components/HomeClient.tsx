@@ -11,7 +11,13 @@ import EmptyState from './EmptyState'
 import PageHeader from './PageHeader'
 import { useApp } from '@/context/AppContext'
 import { relativeDate } from '@/lib/date'
-import { formatAmount, globalTotals, pendingForMe, relationSummaries } from '@/lib/ledger'
+import {
+  formatAmount,
+  globalTotals,
+  incomingRequests,
+  pendingForMe,
+  relationSummaries,
+} from '@/lib/ledger'
 import { cardHover, listItemY, listParent, pageIn } from '@/lib/motion'
 
 type SortKey = 'recent' | 'amount' | 'name'
@@ -30,6 +36,8 @@ export default function HomeClient() {
 
   const totals = globalTotals(state)
   const pending = pendingForMe(state)
+  const requests = incomingRequests(state)
+  const toHandle = pending.length + requests.length
 
   const relations = useMemo(() => {
     const list = relationSummaries(state).filter((r) =>
@@ -90,7 +98,7 @@ export default function HomeClient() {
         </motion.div>
 
         {/* A confirmer */}
-        {pending.length > 0 && (
+        {toHandle > 0 && (
           <Link href="/activite" className="block">
             <motion.div {...cardHover} className="glass flex items-center gap-3 rounded-2xl p-4">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand/10 text-brand">
@@ -98,14 +106,19 @@ export default function HomeClient() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-navy">
-                  {pending.length} remboursement{pending.length > 1 ? 's' : ''} a confirmer
+                  {requests.length > 0
+                    ? `${requests.length} demande${requests.length > 1 ? 's' : ''} de pote`
+                    : `${pending.length} remboursement${pending.length > 1 ? 's' : ''} a confirmer`}
+                  {requests.length > 0 && pending.length > 0
+                    ? ` et ${pending.length} remboursement${pending.length > 1 ? 's' : ''}`
+                    : ''}
                 </p>
                 <p className="text-xs font-medium text-navy/45">
-                  Tant que tu ne confirmes pas, le solde ne bouge pas.
+                  A traiter dans l&apos;onglet Activite.
                 </p>
               </div>
               <span className="rounded-full bg-brand px-2.5 py-1 text-xs font-bold text-white">
-                {pending.length}
+                {toHandle}
               </span>
             </motion.div>
           </Link>

@@ -3,14 +3,12 @@
 import { motion } from 'framer-motion'
 import {
   CloudOff,
-  Copy,
   Database,
   LogOut,
   RefreshCw,
   RotateCcw,
+  Loader2,
   Save,
-  Send,
-  Share2,
   UserPlus,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -21,7 +19,7 @@ import Modal from './Modal'
 import PageHeader from './PageHeader'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
-import { formatAmount, globalTotals, relationSummaries } from '@/lib/ledger'
+import { formatAmount, globalTotals, outgoingRequests, relationSummaries } from '@/lib/ledger'
 import { cardHover, listItemY, listParent, pageIn } from '@/lib/motion'
 
 export default function ProfileClient() {
@@ -36,16 +34,12 @@ export default function ProfileClient() {
   const [avatar, setAvatar] = useState(me.avatar ?? '🙂')
 
   const [friendOpen, setFriendOpen] = useState(false)
-  const [fName, setFName] = useState('')
   const [fEmail, setFEmail] = useState('')
-  const [fPhone, setFPhone] = useState('')
-  const [fAvatar, setFAvatar] = useState('🙂')
-  /** Pote qui vient d'etre cree : on affiche son lien d'invitation. */
-  const [invited, setInvited] = useState<{ name: string; email?: string; link: string } | null>(
-    null
-  )
+  const [fBusy, setFBusy] = useState(false)
+  const [fError, setFError] = useState<string | null>(null)
 
   const totals = globalTotals(state)
+  const sentRequests = outgoingRequests(state)
   const relations = relationSummaries(state)
 
   const advancedThisMonth = state.expenses
@@ -69,52 +63,23 @@ export default function ProfileClient() {
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fEmail.trim())
 
-  const submitFriend = () => {
-    if (!fName.trim() || !emailValid) return
-    const friend = addFriend({
-      name: fName,
-      email: fEmail,
-      phone: fPhone,
-      avatar: fAvatar,
-    })
-    setInvited({
-      name: friend.name,
-      email: friend.email,
-      link: `${window.location.origin}/invite/${friend.claimToken}`,
-    })
-    setFName('')
-    setFEmail('')
-    setFPhone('')
-    setFAvatar('🙂')
-  }
-
-  const closeFriend = () => {
-    setFriendOpen(false)
-    setInvited(null)
-  }
-
-  const shareInvite = async () => {
-    if (!invited) return
-    const message = `Salut ${invited.name} 👋 je t'ai ajoute sur Hasbni pour qu'on suive nos comptes. Rejoins-moi : ${invited.link}`
-    // `navigator.share` ouvre la feuille de partage native (WhatsApp, SMS…).
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: 'Hasbni', text: message })
-        return
-      } catch {
-        /* partage annule : on retombe sur WhatsApp */
-      }
-    }
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener')
-  }
-
-  const copyInvite = async () => {
-    if (!invited) return
+  const submitFriend = async () => {
+    if (!emailValid || fBusy) return
+    setFBusy(true)
+    setFError(null)
     try {
-      await navigator.clipboard.writeText(invited.link)
-      toast('Lien copie')
-    } catch {
-      toast('Copie impossible sur ce navigateur', 'danger')
+      const result = await addFriend(fEmail)
+      toast(
+        result === 'accepted'
+          ? 'Vous etes potes !'
+          : 'Demande envoyee — il doit l’accepter dans l’app'
+      )
+      setFriendOpen(false)
+      setFEmail('')
+    } catch (e) {
+      setFError(e instanceof Error ? e.message : 'Erreur inconnue')
+    } finally {
+      setFBusy(false)
     }
   }
 
@@ -200,8 +165,8 @@ export default function ProfileClient() {
         <div className="glass rounded-2xl p-4">
           <p className="mb-2 text-xs font-medium text-navy/50">Mes potes</p>
           <div className="space-y-2">
-            {state.users
-              .filter((u) => u.id !== me.id)
+            {relations
+              .map((r) => r.user)
               .map((u) => (
                 <Link
                   key={u.id}
@@ -303,110 +268,78 @@ export default function ProfileClient() {
 
       <Modal
         open={friendOpen}
-        onClose={closeFriend}
-        title={invited ? 'Invitation prete' : 'Ajouter un pote'}
-        subtitle={
-          invited
-            ? `${invited.name} rejoindra tes comptes en ouvrant ce lien`
-            : "L'email sert a le reconnaitre quand il s'inscrira"
-        }
+        onClose={() => {
+          setFriendOpen(false)
+          setFError(null)
+        }}
+        title="Ajouter un pote"
+        subtitle="Il recevra une demande dans l'app"
         footer={
-          invited ? (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={copyInvite}
-                className="tap flex-1 rounded-xl border border-silver px-4 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
-              >
-                <Copy size={15} className="mr-1.5" /> Copier
-              </button>
-              <button
-                onClick={() => void shareInvite()}
-                className="tap flex-1 rounded-xl bg-brand px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
-              >
-                <Share2 size={15} className="mr-1.5" /> Envoyer
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={closeFriend}
-                className="tap rounded-xl border border-silver px-4 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={submitFriend}
-                disabled={!fName.trim() || !emailValid}
-                className="tap rounded-xl bg-brand px-5 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Ajouter
-              </button>
-            </div>
-          )
+          <div className="flex items-center justify-end gap-3">
+            <button
+              onClick={() => {
+                setFriendOpen(false)
+                setFError(null)
+              }}
+              className="tap rounded-xl border border-silver px-4 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={() => void submitFriend()}
+              disabled={!emailValid || fBusy}
+              className="tap rounded-xl bg-brand px-5 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {fBusy ? <Loader2 size={16} className="animate-spin" /> : 'Envoyer'}
+            </button>
+          </div>
         }
       >
-        {invited ? (
-          <div className="space-y-3">
-            <div className="glass-sm flex items-start gap-2.5 rounded-2xl p-3">
-              <Send size={15} className="mt-0.5 shrink-0 text-brand" />
-              <p className="text-xs font-medium text-navy/60">
-                Envoie-lui ce lien (WhatsApp, SMS…). S&apos;il s&apos;inscrit avec{' '}
-                <span className="font-semibold text-navy">{invited.email}</span>, le rattachement
-                est automatique — le lien reste utile s&apos;il utilise un autre email.
-              </p>
-            </div>
-            <div className="glass-sm break-all rounded-2xl p-3 text-xs font-semibold text-navy/70">
-              {invited.link}
-            </div>
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-navy/50">
+              Email de ton pote
+            </label>
+            <input
+              type="email"
+              value={fEmail}
+              onChange={(e) => {
+                setFEmail(e.target.value)
+                setFError(null)
+              }}
+              placeholder="souhil@exemple.dz"
+              autoCapitalize="none"
+              onKeyDown={(e) => e.key === 'Enter' && void submitFriend()}
+            />
           </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex gap-3">
-              <div className="w-20">
-                <label className="mb-1.5 block text-xs font-medium text-navy/50">Emoji</label>
-                <input
-                  type="text"
-                  value={fAvatar}
-                  maxLength={2}
-                  onChange={(e) => setFAvatar(e.target.value)}
-                />
+
+          {fError && (
+            <p className="rounded-xl bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-500">
+              {fError}
+            </p>
+          )}
+
+          <p className="text-[11px] font-medium text-navy/45">
+            Il doit deja avoir un compte Hasbni avec cet email.
+          </p>
+
+          {sentRequests.length > 0 && (
+            <div className="glass-sm rounded-2xl p-3">
+              <p className="mb-2 text-xs font-medium text-navy/50">Demandes envoyees</p>
+              <div className="space-y-2">
+                {sentRequests.map(({ request, user }) => (
+                  <div key={request.id} className="flex items-center gap-2.5">
+                    <Avatar user={user} size="sm" />
+                    <span className="flex-1 truncate text-sm font-semibold text-navy">
+                      {user.name}
+                    </span>
+                    <span className="text-[11px] font-semibold text-navy/45">en attente</span>
+                  </div>
+                ))}
               </div>
-              <div className="flex-1">
-                <label className="mb-1.5 block text-xs font-medium text-navy/50">Nom</label>
-                <input
-                  type="text"
-                  value={fName}
-                  onChange={(e) => setFName(e.target.value)}
-                  placeholder="Souhil"
-                />
-              </div>
             </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-navy/50">Email</label>
-              <input
-                type="email"
-                value={fEmail}
-                onChange={(e) => setFEmail(e.target.value)}
-                placeholder="souhil@exemple.dz"
-                autoCapitalize="none"
-              />
-              {fEmail.length > 0 && !emailValid && (
-                <p className="mt-1 text-[11px] font-semibold text-debit">Email invalide</p>
-              )}
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-navy/50">
-                Telephone (optionnel)
-              </label>
-              <input
-                type="tel"
-                value={fPhone}
-                onChange={(e) => setFPhone(e.target.value)}
-                placeholder="+213 …"
-              />
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </Modal>
     </>
   )

@@ -33,17 +33,30 @@ export async function fetchMyProfileId(sb: SB, authUserId: string): Promise<ID |
  * on ne recoit que les relations et groupes dont on fait partie.
  */
 export async function fetchState(sb: SB, profileId: ID): Promise<AppState> {
-  const [profiles, groups, members, expenses, shares, settlements, ledger] = await Promise.all([
-    sb.from('profiles').select('*'),
-    sb.from('groups').select('*'),
-    sb.from('group_members').select('*'),
-    sb.from('expenses').select('*'),
-    sb.from('expense_shares').select('*'),
-    sb.from('settlements').select('*'),
-    sb.from('ledger_entries').select('*'),
-  ])
+  const [profiles, groups, members, expenses, shares, settlements, ledger, requests, friends] =
+    await Promise.all([
+      sb.from('profiles').select('*'),
+      sb.from('groups').select('*'),
+      sb.from('group_members').select('*'),
+      sb.from('expenses').select('*'),
+      sb.from('expense_shares').select('*'),
+      sb.from('settlements').select('*'),
+      sb.from('ledger_entries').select('*'),
+      sb.from('friend_requests').select('*'),
+      sb.from('friendships').select('*'),
+    ])
 
-  for (const res of [profiles, groups, members, expenses, shares, settlements, ledger]) {
+  for (const res of [
+    profiles,
+    groups,
+    members,
+    expenses,
+    shares,
+    settlements,
+    ledger,
+    requests,
+    friends,
+  ]) {
     if (res.error) throw new Error(res.error.message)
   }
 
@@ -57,7 +70,6 @@ export async function fetchState(sb: SB, profileId: ID): Promise<AppState> {
       avatar: p.avatar ?? undefined,
       color: p.color ?? undefined,
       createdBy: p.created_by ?? undefined,
-      claimToken: p.claim_token ?? undefined,
     })),
     groups: (groups.data ?? []).map((g) => ({
       id: g.id,
@@ -110,7 +122,37 @@ export async function fetchState(sb: SB, profileId: ID): Promise<AppState> {
       label: l.label,
       createdAt: l.created_at,
     })),
+    friendRequests: (requests.data ?? []).map((r) => ({
+      id: r.id,
+      fromUser: r.from_user,
+      toUser: r.to_user,
+      status: r.status,
+      createdAt: r.created_at,
+    })),
+    friendships: (friends.data ?? []).map((f) => ({
+      userLow: f.user_low,
+      userHigh: f.user_high,
+    })),
   }
+}
+
+/**
+ * Demande de pote par email. La recherche se fait cote serveur (SECURITY
+ * DEFINER) : la table des profils n'est jamais exposee a une recherche libre.
+ */
+export async function sendFriendRequest(sb: SB, email: string): Promise<'sent' | 'accepted'> {
+  const { data, error } = await sb.rpc('send_friend_request', { target_email: email })
+  if (error) throw new Error(error.message)
+  return (data as 'sent' | 'accepted') ?? 'sent'
+}
+
+export async function respondFriendRequest(
+  sb: SB,
+  requestId: ID,
+  accept: boolean
+): Promise<void> {
+  const { error } = await sb.rpc('respond_friend_request', { request_id: requestId, accept })
+  if (error) throw new Error(error.message)
 }
 
 /**
@@ -182,25 +224,6 @@ export async function pushOp(sb: SB, profileId: ID, op: Op): Promise<void> {
       // Les ecritures inverses sont produites par le trigger d'annulation.
       const table = op.target === 'expense' ? 'expenses' : 'settlements'
       const { error } = await sb.from(table).update({ cancelled: true }).eq('id', op.id)
-      classifyIfError(error)
-      return
-    }
-
-    case 'friend.add': {
-      const { error } = await sb.from('profiles').upsert(
-        {
-          id: op.user.id,
-          user_id: null,
-          name: op.user.name,
-          email: op.user.email ?? null,
-          phone: op.user.phone ?? null,
-          avatar: op.user.avatar ?? null,
-          color: op.user.color ?? null,
-          created_by: profileId,
-          claim_token: op.user.claimToken,
-        },
-        { onConflict: 'id', ignoreDuplicates: true }
-      )
       classifyIfError(error)
       return
     }

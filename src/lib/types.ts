@@ -13,10 +13,7 @@ export interface User {
   email?: string
   avatar?: string // emoji ou URL ; a defaut on affiche l'initiale
   color?: string // teinte de l'avatar
-  /** Profil « fantome » cree par un autre user, en attendant son inscription. */
   createdBy?: ID
-  /** Jeton du lien d'invitation, tant que le profil n'est pas reclame. */
-  claimToken?: string
 }
 
 export interface Group {
@@ -86,6 +83,22 @@ export interface LedgerEntry {
   label: string
 }
 
+export type FriendRequestStatus = 'pending' | 'accepted' | 'declined'
+
+/** Demande de pote : l'amitie n'existe qu'apres acceptation. */
+export interface FriendRequest {
+  id: ID
+  fromUser: ID
+  toUser: ID
+  status: FriendRequestStatus
+  createdAt: string
+}
+
+export interface Friendship {
+  userLow: ID
+  userHigh: ID
+}
+
 export interface AppState {
   currentUserId: ID
   users: User[]
@@ -95,6 +108,8 @@ export interface AppState {
   expenseShares: ExpenseShare[]
   settlements: Settlement[]
   ledger: LedgerEntry[]
+  friendRequests: FriendRequest[]
+  friendships: Friendship[]
 }
 
 /** Vue agregee d'une relation bilaterale, pour l'ecran d'accueil. */

@@ -207,5 +207,13 @@ export function buildSeed(): AppState {
     expenseShares,
     settlements,
     ledger,
+    // En demo, tout le monde est deja pote.
+    friendRequests: [],
+    friendships: users
+      .filter((u) => u.id !== ME)
+      .map((u) => ({
+        userLow: ME < u.id ? ME : u.id,
+        userHigh: ME < u.id ? u.id : ME,
+      })),
   }
 }

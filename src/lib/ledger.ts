@@ -115,10 +115,45 @@ export function relationBalance(
   return round(net)
 }
 
-/** Toutes les relations de l'utilisateur courant, triees par activite recente. */
+/** Identifiants des potes acceptes. */
+export function friendIds(state: AppState): ID[] {
+  const me = state.currentUserId
+  return state.friendships
+    .map((f) => (f.userLow === me ? f.userHigh : f.userHigh === me ? f.userLow : null))
+    .filter((id): id is ID => Boolean(id))
+}
+
+/** Demandes de pote recues en attente de reponse. */
+export function incomingRequests(state: AppState) {
+  const me = state.currentUserId
+  return state.friendRequests
+    .filter((r) => r.toUser === me && r.status === 'pending')
+    .map((r) => ({ request: r, user: state.users.find((u) => u.id === r.fromUser) }))
+    .filter((x): x is { request: (typeof state.friendRequests)[number]; user: User } =>
+      Boolean(x.user)
+    )
+}
+
+/** Demandes envoyees, toujours sans reponse. */
+export function outgoingRequests(state: AppState) {
+  const me = state.currentUserId
+  return state.friendRequests
+    .filter((r) => r.fromUser === me && r.status === 'pending')
+    .map((r) => ({ request: r, user: state.users.find((u) => u.id === r.toUser) }))
+    .filter((x): x is { request: (typeof state.friendRequests)[number]; user: User } =>
+      Boolean(x.user)
+    )
+}
+
+/**
+ * Toutes les relations de l'utilisateur courant, triees par activite recente.
+ * Un pote accepte apparait meme sans aucun mouvement (solde a zero).
+ */
 export function relationSummaries(state: AppState): RelationSummary[] {
   const me = state.currentUserId
   const byUser = new Map<ID, { entries: LedgerEntry[] }>()
+
+  for (const id of friendIds(state)) byUser.set(id, { entries: [] })
 
   for (const e of state.ledger) {
     const other = e.userA === me ? e.userB : e.userB === me ? e.userA : null

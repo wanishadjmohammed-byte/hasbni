@@ -12,7 +12,6 @@ export type ProfileRow = {
   avatar: string | null
   color: string | null
   created_by: string | null
-  claim_token: string
   created_at: string
 }
 
@@ -73,6 +72,21 @@ export type LedgerEntryRow = {
   created_at: string
 }
 
+export type FriendRequestRow = {
+  id: string
+  from_user: string
+  to_user: string
+  status: 'pending' | 'accepted' | 'declined'
+  created_at: string
+  responded_at: string | null
+}
+
+export type FriendshipRow = {
+  user_low: string
+  user_high: string
+  created_at: string
+}
+
 type Table<Row> = {
   Row: Row
   Insert: Partial<Row>
@@ -95,9 +109,14 @@ export interface Database {
       expense_shares: Table<ExpenseShareRow>
       settlements: Table<SettlementRow>
       ledger_entries: Table<LedgerEntryRow>
+      friend_requests: Table<FriendRequestRow>
+      friendships: Table<FriendshipRow>
     }
     Views: Empty
-    Functions: Empty
+    Functions: {
+      send_friend_request: { Args: { target_email: string }; Returns: string }
+      respond_friend_request: { Args: { request_id: string; accept: boolean }; Returns: string }
+    }
     Enums: {
       split_type: 'equal' | 'custom' | 'items'
       movement_status: 'pending' | 'confirmed'

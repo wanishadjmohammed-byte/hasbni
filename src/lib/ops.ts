@@ -20,7 +20,6 @@ export type Op =
   | { kind: 'settlement.create'; settlement: Settlement }
   | { kind: 'settlement.confirm'; id: ID; confirmedAt: string }
   | { kind: 'movement.cancel'; target: 'expense' | 'settlement'; id: ID; inverse: LedgerEntry[] }
-  | { kind: 'friend.add'; user: User }
   | { kind: 'group.create'; group: Group; memberIds: ID[] }
   | { kind: 'profile.update'; id: ID; patch: Partial<User> }
 
@@ -81,10 +80,6 @@ export function applyOp(state: AppState, op: Op): AppState {
             : state.settlements,
         ledger: [...state.ledger, ...op.inverse],
       }
-
-    case 'friend.add':
-      if (state.users.some((u) => u.id === op.user.id)) return state
-      return { ...state, users: [...state.users, op.user] }
 
     case 'group.create': {
       if (state.groups.some((g) => g.id === op.group.id)) return state
@@ -180,25 +175,6 @@ export function buildCancelOp(
       label: `Annulation — ${e.label}`,
     }))
   return { kind: 'movement.cancel', target, id, inverse }
-}
-
-export function buildFriendOp(
-  input: { name: string; email: string; phone: string; avatar: string },
-  createdBy: ID
-): Op {
-  const user: User = {
-    id: uid('u'),
-    name: input.name.trim(),
-    email: input.email.trim().toLowerCase() || undefined,
-    phone: input.phone.trim() || undefined,
-    avatar: input.avatar || '🙂',
-    color: '#22A06B',
-    createdBy,
-    // Genere ici pour que le lien d'invitation soit affichable immediatement,
-    // meme hors ligne.
-    claimToken: uid('tok'),
-  }
-  return { kind: 'friend.add', user }
 }
 
 export function buildGroupOp(name: string, emoji: string, memberIds: ID[], ownerId: ID): Op {
