@@ -177,6 +177,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void refresh()
   }, [demo, profileId, refresh])
 
+  // Retour au premier plan : on resynchronise, au cas ou le temps reel aurait
+  // manque un evenement pendant que l'app etait fermee ou en arriere-plan.
+  useEffect(() => {
+    if (demo || !profileId) return
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refresh()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
+  }, [demo, profileId, refresh])
+
   // ── Persistance de l'instantane ──────────────────────────────────────────
   useEffect(() => {
     if (!ready) return

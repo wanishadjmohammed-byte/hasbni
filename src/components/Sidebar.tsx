@@ -7,12 +7,13 @@ import { usePathname } from 'next/navigation'
 import Avatar from './Avatar'
 import { NAV_ITEMS } from './nav'
 import { useApp } from '@/context/AppContext'
-import { formatAmount, globalTotals } from '@/lib/ledger'
+import { formatAmount, globalTotals, incomingRequests, pendingForMe } from '@/lib/ledger'
 
 export default function Sidebar() {
   const pathname = usePathname()
   const { state, me } = useApp()
   const totals = globalTotals(state)
+  const badge = incomingRequests(state).length + pendingForMe(state).length
 
   return (
     <aside className="glass-sidebar fixed inset-y-0 left-0 z-30 hidden w-56 flex-col lg:flex">
@@ -49,6 +50,16 @@ export default function Sidebar() {
               )}
               <Icon size={17} className="relative z-10" />
               <span className="relative z-10">{label}</span>
+              {href === '/activite' && badge > 0 && (
+                <span
+                  className={clsx(
+                    'relative z-10 ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold',
+                    active ? 'bg-white/25 text-white' : 'bg-brand text-white'
+                  )}
+                >
+                  {badge > 9 ? '9+' : badge}
+                </span>
+              )}
             </Link>
           )
         })}

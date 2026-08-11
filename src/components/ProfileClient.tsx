@@ -15,6 +15,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Avatar from './Avatar'
+import FriendRequests from './FriendRequests'
 import Modal from './Modal'
 import PageHeader from './PageHeader'
 import { useApp } from '@/context/AppContext'
@@ -99,6 +100,8 @@ export default function ProfileClient() {
       />
 
       <motion.div {...pageIn} className="space-y-4 p-6">
+        <FriendRequests />
+
         <div className="glass rounded-2xl p-4">
           <div className="flex items-center gap-3">
             <Avatar user={{ name, avatar, color: me.color }} size="xl" />
