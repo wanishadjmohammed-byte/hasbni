@@ -268,7 +268,7 @@ export async function fetchGroupPositions(
     if (isMissingFunction(error)) return null
     throw new Error(translatePostgresError(error.message))
   }
-  return new Map((data ?? []).map((r) => [r.user_id, Number(r.position)]))
+  return new Map((data ?? []).map((r) => [r.user_id, Number(r.net_position)]))
 }
 
 /**

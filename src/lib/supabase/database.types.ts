@@ -172,7 +172,7 @@ export interface Database {
       }
       group_positions: {
         Args: { p_group_id: string }
-        Returns: { user_id: string; position: number }[]
+        Returns: { user_id: string; net_position: number }[]
       }
       delete_my_account: { Args: Record<string, never>; Returns: undefined }
       export_my_data: { Args: Record<string, never>; Returns: unknown }

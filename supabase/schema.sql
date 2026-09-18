@@ -687,9 +687,12 @@ $$;
  * Necessairement cote serveur : la RLS ne montre au client que les ecritures ou
  * il est partie, donc une simplification calculee en local ignore les dettes
  * entre deux autres membres.
+ *
+ * `net_position` et non `position` : ce dernier est un mot-cle Postgres refuse
+ * comme nom de colonne dans un `returns table (...)`.
  */
 create or replace function public.group_positions(p_group_id uuid)
-returns table (user_id uuid, position bigint)
+returns table (user_id uuid, net_position bigint)
 language plpgsql stable security definer set search_path = public as $$
 begin
   if not public.is_group_member(p_group_id, public.current_profile_id())

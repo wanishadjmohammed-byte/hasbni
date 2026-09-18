@@ -698,10 +698,14 @@ create index if not exists profiles_active_idx on public.profiles (id) where del
 --  Cette fonction voit tout le groupe (SECURITY DEFINER) mais ne renvoie que
 --  des positions nettes par membre — jamais le detail des mouvements entre
 --  tiers.
+--
+--  La colonne s'appelle `net_position` et non `position` : `position` est un
+--  mot-cle Postgres de categorie col_name_keyword, refuse comme nom de colonne
+--  dans un `returns table (...)`.
 -- ────────────────────────────────────────────────────────────────────────────
 
 create or replace function public.group_positions(p_group_id uuid)
-returns table (user_id uuid, position bigint)
+returns table (user_id uuid, net_position bigint)
 language plpgsql
 stable
 security definer
