@@ -129,6 +129,69 @@ Palette dans `tailwind.config.ts`, utilitaires dans `src/app/globals.css` :
 Classes : `.glass`, `.glass-sm`, `.glass-sidebar`, `.glass-nav`, `.blob-1/2/3`.
 Animations : variantes partagees dans `src/lib/motion.ts`.
 
+## Console d'administration — `/admin`
+
+Application a part, servie par le meme deploiement mais ne partageant rien avec
+l'app : ni fournisseur de session, ni etat, ni temps reel, ni service worker
+(exclu dans `public/sw.js`). Les routes applicatives vivent dans le groupe
+`src/app/(app)/`, la console dans `src/app/admin/`.
+
+### Mise en route
+
+1. Executer `supabase/patch-07-admin.sql`.
+2. Renseigner dans `.env.local` : `SUPABASE_SERVICE_ROLE_KEY` (Project Settings >
+   API) et `ADMIN_SESSION_SECRET` (`openssl rand -base64 48`).
+3. Se creer un compte normal dans l'app, puis decommenter le bloc final du patch
+   07 avec son email pour se declarer administrateur.
+4. Ouvrir `/admin`.
+
+### Securite
+
+- **`SUPABASE_SERVICE_ROLE_KEY` n'est jamais prefixee `NEXT_PUBLIC_`.** Elle
+  contourne la RLS : dans un bundle navigateur, elle donnerait la base complete.
+  `src/lib/admin/server.ts` ouvre sur `import 'server-only'` — un import depuis un
+  composant client fait echouer le BUILD.
+- **Le statut d'admin vit dans sa propre table**, jamais dans une colonne de
+  `profiles` : le declencheur `guard_profile_columns` ne fige qu'une liste nommee
+  de colonnes, et chacun peut ecrire sa propre ligne — un `is_admin` sur
+  `profiles` serait auto-attribuable.
+- **Toutes les fonctions `admin_*` sont retirees a `public`, `anon` et
+  `authenticated`.** Postgres accorde EXECUTE a PUBLIC par defaut : sans ce
+  `revoke`, ces fonctions `security definer` seraient un aspirateur a donnees
+  ouvert a tout compte connecte.
+- **La console a sa propre session**, cookie signe en HMAC et `httpOnly` :
+  l'app garde la sienne dans `localStorage`, qu'un middleware ne peut pas lire.
+- **Pseudonymes par defaut.** Voir un nom demande un motif, et la consultation
+  est inscrite dans `admin_audit_log` — avant que la donnee soit renvoyee.
+
+### Les six ecrans
+
+| Ecran | Repond a |
+| --- | --- |
+| Pulse | Est-ce que quelque chose brule ? |
+| Activation | Ou perd-on les nouveaux inscrits ? |
+| Retention | Reviennent-ils la semaine suivante ? |
+| Utilisateurs | Files de support : sans pote, bloque, en attente depuis 7 j |
+| Sante du grand livre | `SUM(ledger_entries)` colle-t-il encore aux parts et remboursements ? |
+| Moderation | Cadence anormale, taux d'annulation, montants inhabituels |
+
+« Sante du grand livre » est la raison de construire cette console plutot que de
+tout confier a un outil tiers : aucun produit d'analytics ne peut verifier cet
+invariant, il demande la logique metier de Hasbni. Un ecart y est toujours un
+bug — declencheur SQL ou rejeu de la file hors ligne.
+
+### Mesure
+
+`src/lib/analytics.ts` envoie les evenements par lots vers `/api/events`, qui les
+ecrit avec la cle de service. Deux regles tenues partout : **jamais de montant
+dans un evenement**, seulement une tranche (`<1k`, `1-5k`, `5-20k`, `20k+`) ; et
+un evenement porte le nom de ce que la personne a fait, pas du composant touche.
+Le profil est deduit du jeton, jamais du corps de la requete — sinon n'importe
+qui pourrait attribuer son activite a quelqu'un d'autre.
+
+Agregation journaliere : `POST /api/admin/rollup` avec l'en-tete
+`x-rollup-secret`, a brancher sur un cron.
+
 ## Verification
 
 ```bash
@@ -148,5 +211,6 @@ plus le build.
 - Parcours d'invitation : ajouter un pote suppose aujourd'hui qu'il ait deja un compte,
   a l'adresse exacte qu'on tape.
 - Migrations Supabase CLI a la place du copier-coller dans l'editeur SQL.
-- Interface d'administration (comportement utilisateur, sante du grand livre).
+- Console : geler un compte et annuler d'autorite une depense ne sont pas cables
+  — il faut d'abord decider ce qui arrive aux soldes des tiers.
 - Points ouverts du CDC 8 : multi-devises, groupe sans compte, confidentialite intra-groupe.

@@ -26,6 +26,12 @@ export function reportError(error: unknown, context: ErrorContext = {}): void {
     at: new Date().toISOString(),
   }
 
+  // Le tableau de bord « Sante » compte les plantages : ils doivent y arriver
+  // meme si aucun collecteur externe n'est branche.
+  void import('./analytics')
+    .then((m) => m.track('app_error', { boundary: context.boundary ?? 'unknown' }))
+    .catch(() => {})
+
   if (process.env.NODE_ENV !== 'production') {
     console.error('[Hasbni]', payload.message, payload)
     return

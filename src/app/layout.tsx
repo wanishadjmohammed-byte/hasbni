@@ -1,8 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
-import AppShell from '@/components/AppShell'
-import { AppProvider } from '@/context/AppContext'
-import { AuthProvider } from '@/context/AuthContext'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -34,16 +31,18 @@ export const metadata: Metadata = {
   },
 }
 
+/**
+ * Racine minimale.
+ *
+ * Les fournisseurs de l'app (session, etat, file de synchro, temps reel) sont
+ * descendus dans le groupe `(app)` : la console d'administration partage le
+ * meme domaine mais n'a rien a faire d'un contexte PWA, d'un abonnement temps
+ * reel ou d'une base IndexedDB.
+ */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
-      <body>
-        <AuthProvider>
-          <AppProvider>
-            <AppShell>{children}</AppShell>
-          </AppProvider>
-        </AuthProvider>
-      </body>
+      <body>{children}</body>
     </html>
   )
 }

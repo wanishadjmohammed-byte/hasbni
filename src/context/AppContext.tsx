@@ -37,6 +37,7 @@ import {
   envelope,
   type Op,
 } from '@/lib/ops'
+import { bucket, track } from '@/lib/analytics'
 import { buildSeed } from '@/lib/seed'
 import { getSupabase, supabaseEnabled } from '@/lib/supabase/client'
 import {
@@ -300,6 +301,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             // rejouer ou la supprimer (audit CRD-4).
             const detail =
               error instanceof Error ? error.message : 'Operation refusee par le serveur'
+            track('sync_op_failed', { op_kind: item.op.kind, attempts: item.attempts + 1 })
             await rejectOp(item, detail)
             await dequeueOp(item.opId)
             setRejected(await readRejected())
@@ -406,6 +408,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addExpense = useCallback(
     (input: NewExpenseInput) => {
       dispatch(buildExpenseOp({ ...input, createdBy: currentId }))
+      track('expense_created', {
+        split_type: input.splitType,
+        participants_count: Object.keys(input.shares).length,
+        amount_bucket: bucket(input.amount),
+        from_group: Boolean(input.groupId),
+        i_paid: input.payerId === currentId,
+      })
     },
     [dispatch, currentId]
   )
@@ -423,6 +432,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const previous = prev.expenses.find((e) => e.id === expenseId)
         if (!previous) return prev
         const op = buildAmendOp(previous, input)
+        track('expense_amended', {
+          amount_bucket: bucket(input.amount),
+          participants_count: Object.keys(input.shares).length,
+        })
         if (!demo) {
           const item = envelope(op)
           void enqueueOp(item).then(async () => {
@@ -437,13 +450,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const addSettlement = useCallback(
-    (input: NewSettlementInput) => dispatch(buildSettlementOp(input)),
-    [dispatch]
+    (input: NewSettlementInput) => {
+      dispatch(buildSettlementOp(input))
+      track('settlement_created', {
+        method: input.method,
+        amount_bucket: bucket(input.amount),
+        direction: input.fromUser === currentId ? 'sent' : 'received',
+      })
+    },
+    [dispatch, currentId]
   )
 
   const confirmSettlement = useCallback(
-    (id: ID) =>
-      dispatch({ kind: 'settlement.confirm', id, confirmedAt: new Date().toISOString() }),
+    (id: ID) => {
+      dispatch({ kind: 'settlement.confirm', id, confirmedAt: new Date().toISOString() })
+      track('settlement_confirmed')
+    },
     [dispatch]
   )
 
@@ -451,6 +473,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (kind: 'expense' | 'settlement', id: ID) => {
       setState((prev) => {
         const op = buildCancelOp(prev, kind, id)
+        track(kind === 'expense' ? 'expense_cancelled' : 'settlement_cancelled')
         if (!demo) {
           const item = envelope(op)
           void enqueueOp(item).then(async () => {
@@ -471,7 +494,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         throw new Error('Les demandes de pote necessitent un compte Supabase')
       }
       const result = await sendFriendRequest(sb, email)
-      await refresh()
+      track('friend_request_sent', { outcome: result })
+      await refresh({ force: true })
       return result
     },
     [demo, refresh]
@@ -482,7 +506,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const sb = getSupabase()
       if (!sb || demo) return
       await respondFriendRequest(sb, requestId, accept)
-      await refresh()
+      track('friend_request_answered', { accepted: accept })
+      await refresh({ force: true })
     },
     [demo, refresh]
   )
@@ -491,6 +516,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (name: string, emoji: string, memberIds: ID[]) => {
       const op = buildGroupOp(name, emoji, memberIds, currentId)
       dispatch(op)
+      track('group_created', { members_count: memberIds.length + 1 })
       return (op as Extract<Op, { kind: 'group.create' }>).group
     },
     [dispatch, currentId]

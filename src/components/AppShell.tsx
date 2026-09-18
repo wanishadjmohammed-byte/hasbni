@@ -10,6 +10,7 @@ import Sidebar from './Sidebar'
 import Toasts from './Toasts'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
+import { installAnalytics } from '@/lib/analytics'
 import { installGlobalErrorHandlers } from '@/lib/report'
 
 /** Ecrans plein ecran, sans navigation. */
@@ -26,6 +27,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   // Promesses rejetees et erreurs hors React : sans ca, elles disparaissaient
   // dans la console de l'utilisateur (audit OPS-3).
   useEffect(() => installGlobalErrorHandlers(), [])
+  useEffect(() => installAnalytics(), [])
 
   // Avec Supabase configure, tout l'espace applicatif exige une session.
   useEffect(() => {
