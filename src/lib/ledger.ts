@@ -5,6 +5,7 @@ import type {
   ID,
   LedgerEntry,
   Movement,
+  RelationBalance,
   RelationSummary,
   Settlement,
   SplitType,
@@ -115,6 +116,98 @@ export function relationBalance(
   return round(net)
 }
 
+/**
+ * Recalcule tous les soldes a partir du grand livre complet.
+ * Reservee au mode demonstration et aux tests : en mode Supabase les soldes
+ * viennent de la vue `relation_balances`, parce que le grand livre charge
+ * n'est qu'une fenetre recente.
+ */
+export function recomputeBalances(state: AppState): RelationBalance[] {
+  return applyEntriesToBalances([], state.currentUserId, state.ledger)
+}
+
+/**
+ * Applique un lot d'ecritures aux soldes. C'est ce qui garde la saisie
+ * optimiste : le reducteur ajoute les ecritures au grand livre local ET leur
+ * delta ici, sans attendre le serveur.
+ */
+export function applyEntriesToBalances(
+  balances: RelationBalance[],
+  me: ID,
+  added: LedgerEntry[],
+  removed: LedgerEntry[] = []
+): RelationBalance[] {
+  // `balances` peut manquer : un instantane IndexedDB ecrit par une version
+  // anterieure survit a la montee de version de la base.
+  const map = new Map<ID, RelationBalance>((balances ?? []).map((b) => [b.otherId, { ...b }]))
+  // Deux registres distincts : une correction retire puis reajoute les memes
+  // references, et ne doit pas faire baisser le compteur de mouvements.
+  const refsOut = new Map<ID, Set<ID>>()
+  const refsIn = new Map<ID, Set<ID>>()
+
+  const touch = (e: LedgerEntry, sign: 1 | -1) => {
+    const other = e.userA === me ? e.userB : e.userB === me ? e.userA : null
+    if (!other) return
+    // `userB` est le crediteur : si c'est moi, l'autre me doit.
+    const delta = (e.userB === me ? e.amount : -e.amount) * sign
+    const row = map.get(other) ?? {
+      otherId: other,
+      net: 0,
+      projected: 0,
+      lastActivity: e.createdAt,
+      movementCount: 0,
+    }
+    row.projected += delta
+    if (e.status === 'confirmed') row.net += delta
+    if (e.createdAt > row.lastActivity) row.lastActivity = e.createdAt
+
+    // Compte des mouvements : approximation locale, le serveur fait foi au
+    // prochain rafraichissement.
+    const registry = sign === 1 ? refsIn : refsOut
+    let refs = registry.get(other)
+    if (!refs) {
+      refs = new Set()
+      registry.set(other, refs)
+    }
+    if (!refs.has(e.refId)) {
+      refs.add(e.refId)
+      row.movementCount = Math.max(0, row.movementCount + sign)
+    }
+
+    map.set(other, row)
+  }
+
+  for (const e of removed) touch(e, -1)
+  for (const e of added) touch(e, 1)
+
+  return [...map.values()].map((b) => ({ ...b, net: round(b.net), projected: round(b.projected) }))
+}
+
+/**
+ * Solde d'une relation. On prend celui du serveur quand il existe, et on
+ * retombe sur un calcul local sinon (mode demonstration, ou pote encore sans
+ * aucun mouvement).
+ */
+export function balanceOf(state: AppState, otherId: ID): { net: number; projected: number } {
+  const row = state.balances?.find((b) => b.otherId === otherId)
+  if (row) return { net: row.net, projected: row.projected }
+  return {
+    net: relationBalance(state.ledger, state.currentUserId, otherId),
+    projected: relationBalance(state.ledger, state.currentUserId, otherId, { includePending: true }),
+  }
+}
+
+/** Index des parts par depense — evite un `filter` par depense (audit SCL-3). */
+export function indexShares(state: AppState): Map<ID, ExpenseShare[]> {
+  const map = new Map<ID, ExpenseShare[]>()
+  for (const s of state.expenseShares) {
+    const list = map.get(s.expenseId)
+    if (list) list.push(s)
+    else map.set(s.expenseId, [s])
+  }
+  return map
+}
+
 /** Identifiants des potes acceptes. */
 export function friendIds(state: AppState): ID[] {
   const me = state.currentUserId
@@ -161,37 +254,34 @@ export function outgoingRequests(state: AppState) {
 /**
  * Toutes les relations de l'utilisateur courant, triees par activite recente.
  * Un pote accepte apparait meme sans aucun mouvement (solde a zero).
+ *
+ * Les soldes viennent de `state.balances` (vue Postgres) : on ne parcourt plus
+ * le grand livre, qui n'est de toute facon qu'une fenetre recente.
  */
 export function relationSummaries(state: AppState): RelationSummary[] {
-  const me = state.currentUserId
-  const byUser = new Map<ID, { entries: LedgerEntry[] }>()
+  const byUser = new Map<ID, User>(state.users.map((u) => [u.id, u]))
+  const rows = new Map<ID, RelationBalance>()
 
-  for (const id of friendIds(state)) byUser.set(id, { entries: [] })
+  for (const b of state.balances ?? []) rows.set(b.otherId, b)
 
-  for (const e of state.ledger) {
-    const other = e.userA === me ? e.userB : e.userB === me ? e.userA : null
-    if (!other) continue
-    if (!byUser.has(other)) byUser.set(other, { entries: [] })
-    byUser.get(other)!.entries.push(e)
+  // Un pote accepte sans aucun mouvement n'apparait pas dans la vue.
+  for (const id of friendIds(state)) {
+    if (!rows.has(id)) {
+      rows.set(id, { otherId: id, net: 0, projected: 0, lastActivity: '', movementCount: 0 })
+    }
   }
 
   const out: RelationSummary[] = []
-  for (const [userId, { entries }] of byUser) {
-    const user = state.users.find((u) => u.id === userId)
+  for (const [userId, row] of rows) {
+    const user = byUser.get(userId)
     if (!user) continue
-    const net = relationBalance(entries, me, userId)
-    const projected = relationBalance(entries, me, userId, { includePending: true })
-    const lastActivity = entries.reduce(
-      (acc, e) => (e.createdAt > acc ? e.createdAt : acc),
-      entries[0]?.createdAt ?? ''
-    )
     out.push({
       userId,
       user,
-      net,
-      pending: round(projected - net),
-      lastActivity,
-      movementCount: new Set(entries.map((e) => e.refId)).size,
+      net: row.net,
+      pending: round(row.projected - row.net),
+      lastActivity: row.lastActivity,
+      movementCount: row.movementCount,
     })
   }
   return out.sort((a, b) => b.lastActivity.localeCompare(a.lastActivity))
@@ -244,17 +334,46 @@ function settlementToMovement(s: Settlement, state: AppState, counterpartId: ID)
   }
 }
 
-/** Timeline anti-chronologique d'une relation (CDC 2.3). */
-export function relationMovements(state: AppState, otherId: ID): Movement[] {
+/** Construit le mouvement affiche pour une depense, vu par `me`. */
+function expenseToMovement(
+  exp: Expense,
+  shares: ExpenseShare[],
+  counterpartId: ID,
+  delta: number
+): Movement {
+  return {
+    id: exp.id,
+    kind: 'expense',
+    createdAt: exp.createdAt,
+    status: exp.status,
+    label: exp.motive,
+    delta: round(delta),
+    amount: Math.abs(round(delta)),
+    payerId: exp.payerId,
+    counterpartId,
+    totalAmount: exp.amount,
+    participantsCount: shares.length,
+    awaitingMe: false,
+  }
+}
+
+/**
+ * Timeline anti-chronologique d'une relation (CDC 2.3).
+ * `index` est optionnel : le passer evite de reconstruire l'index des parts
+ * quand on boucle sur plusieurs relations.
+ */
+export function relationMovements(
+  state: AppState,
+  otherId: ID,
+  index?: Map<ID, ExpenseShare[]>
+): Movement[] {
   const me = state.currentUserId
+  const shareIndex = index ?? indexShares(state)
   const movements: Movement[] = []
 
   for (const exp of state.expenses) {
     if (exp.cancelled) continue
-    const shares = state.expenseShares.filter((s) => s.expenseId === exp.id)
-    const involvesMe = exp.payerId === me || shares.some((s) => s.userId === me)
-    const involvesOther = exp.payerId === otherId || shares.some((s) => s.userId === otherId)
-    if (!involvesMe || !involvesOther) continue
+    const shares = shareIndex.get(exp.id) ?? []
 
     let delta = 0
     if (exp.payerId === me) {
@@ -264,25 +383,13 @@ export function relationMovements(state: AppState, otherId: ID): Movement[] {
     }
     if (round(delta) === 0) continue
 
-    movements.push({
-      id: exp.id,
-      kind: 'expense',
-      createdAt: exp.createdAt,
-      status: exp.status,
-      label: exp.motive,
-      delta: round(delta),
-      amount: Math.abs(round(delta)),
-      payerId: exp.payerId,
-      counterpartId: otherId,
-      totalAmount: exp.amount,
-      participantsCount: shares.length,
-      awaitingMe: false,
-    })
+    movements.push(expenseToMovement(exp, shares, otherId, delta))
   }
 
   for (const s of state.settlements) {
     if (s.cancelled) continue
-    const pair = (s.fromUser === me && s.toUser === otherId) || (s.fromUser === otherId && s.toUser === me)
+    const pair =
+      (s.fromUser === me && s.toUser === otherId) || (s.fromUser === otherId && s.toUser === me)
     if (!pair) continue
     movements.push(settlementToMovement(s, state, otherId))
   }
@@ -290,20 +397,57 @@ export function relationMovements(state: AppState, otherId: ID): Movement[] {
   return movements.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
-/** Toutes les activites recentes de l'utilisateur courant, tous potes confondus. */
+/**
+ * Toutes les activites recentes, tous potes confondus.
+ *
+ * Une seule passe sur les depenses et les remboursements. L'ancienne version
+ * rappelait `relationMovements` pour chaque pote, et chacun de ces appels
+ * refiltrait toutes les parts : le cout etait le produit
+ * potes x depenses x parts (audit SCL-3).
+ */
 export function allMovements(state: AppState): (Movement & { otherUser: User })[] {
   const me = state.currentUserId
-  const others = state.users.filter((u) => u.id !== me)
-  const seen = new Set<string>()
+  const byId = new Map<ID, User>(state.users.map((u) => [u.id, u]))
+  const shareIndex = indexShares(state)
   const out: (Movement & { otherUser: User })[] = []
-  for (const other of others) {
-    for (const m of relationMovements(state, other.id)) {
-      const key = `${m.id}:${other.id}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      out.push({ ...m, otherUser: other })
+
+  for (const exp of state.expenses) {
+    if (exp.cancelled) continue
+    const shares = shareIndex.get(exp.id) ?? []
+
+    if (exp.payerId === me) {
+      // J'ai avance : chaque participant m'en doit sa part.
+      for (const share of shares) {
+        if (share.userId === me || round(share.shareAmount) === 0) continue
+        const otherUser = byId.get(share.userId)
+        if (!otherUser) continue
+        out.push({
+          ...expenseToMovement(exp, shares, share.userId, share.shareAmount),
+          otherUser,
+        })
+      }
+    } else {
+      // Quelqu'un a avance : je ne lui dois que ma propre part.
+      const mine = shares.find((s) => s.userId === me)
+      if (!mine || round(mine.shareAmount) === 0) continue
+      const otherUser = byId.get(exp.payerId)
+      if (!otherUser) continue
+      out.push({
+        ...expenseToMovement(exp, shares, exp.payerId, -mine.shareAmount),
+        otherUser,
+      })
     }
   }
+
+  for (const s of state.settlements) {
+    if (s.cancelled) continue
+    const otherId = s.fromUser === me ? s.toUser : s.toUser === me ? s.fromUser : null
+    if (!otherId) continue
+    const otherUser = byId.get(otherId)
+    if (!otherUser) continue
+    out.push({ ...settlementToMovement(s, state, otherId), otherUser })
+  }
+
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
@@ -317,6 +461,42 @@ export interface SimplifiedTransfer {
   amount: number
 }
 
+/**
+ * Repartition gloutonne a partir de positions deja calculees.
+ * > 0 : on lui doit ; < 0 : il doit.
+ */
+export function simplifyFromPositions(positions: Map<ID, number>): SimplifiedTransfer[] {
+  const debtors = [...positions.entries()]
+    .filter(([, v]) => v < -0.5)
+    .map(([id, v]) => ({ id, v: -v }))
+  const creditors = [...positions.entries()].filter(([, v]) => v > 0.5).map(([id, v]) => ({ id, v }))
+  debtors.sort((a, b) => b.v - a.v)
+  creditors.sort((a, b) => b.v - a.v)
+
+  const transfers: SimplifiedTransfer[] = []
+  let i = 0
+  let j = 0
+  while (i < debtors.length && j < creditors.length) {
+    const amount = Math.min(debtors[i].v, creditors[j].v)
+    if (amount > 0.5) {
+      transfers.push({ from: debtors[i].id, to: creditors[j].id, amount: round(amount) })
+    }
+    debtors[i].v -= amount
+    creditors[j].v -= amount
+    if (debtors[i].v <= 0.5) i++
+    if (creditors[j].v <= 0.5) j++
+  }
+  return transfers
+}
+
+/**
+ * Simplification calculee localement.
+ *
+ * Attention : sous RLS le client ne voit que les ecritures ou il est partie,
+ * donc cette version ignore les dettes entre deux autres membres. Elle ne sert
+ * que de repli (mode demonstration, projet sans le patch 06) — le chemin
+ * nominal passe par `group_positions` cote serveur.
+ */
 export function simplifyGroup(state: AppState, groupId: ID): SimplifiedTransfer[] {
   const memberIds = state.groupMembers.filter((m) => m.groupId === groupId).map((m) => m.userId)
   const set = new Set(memberIds)
@@ -330,23 +510,7 @@ export function simplifyGroup(state: AppState, groupId: ID): SimplifiedTransfer[
     positions.set(e.userB, (positions.get(e.userB) ?? 0) + e.amount)
   }
 
-  const debtors = [...positions.entries()].filter(([, v]) => v < -0.5).map(([id, v]) => ({ id, v: -v }))
-  const creditors = [...positions.entries()].filter(([, v]) => v > 0.5).map(([id, v]) => ({ id, v }))
-  debtors.sort((a, b) => b.v - a.v)
-  creditors.sort((a, b) => b.v - a.v)
-
-  const transfers: SimplifiedTransfer[] = []
-  let i = 0
-  let j = 0
-  while (i < debtors.length && j < creditors.length) {
-    const amount = Math.min(debtors[i].v, creditors[j].v)
-    if (amount > 0.5) transfers.push({ from: debtors[i].id, to: creditors[j].id, amount: round(amount) })
-    debtors[i].v -= amount
-    creditors[j].v -= amount
-    if (debtors[i].v <= 0.5) i++
-    if (creditors[j].v <= 0.5) j++
-  }
-  return transfers
+  return simplifyFromPositions(positions)
 }
 
 export function userById(state: AppState, id: ID): User | undefined {
@@ -354,8 +518,10 @@ export function userById(state: AppState, id: ID): User | undefined {
 }
 
 export function groupMembersOf(state: AppState, groupId: ID): User[] {
-  const ids = state.groupMembers.filter((m) => m.groupId === groupId).map((m) => m.userId)
-  return state.users.filter((u) => ids.includes(u.id))
+  const ids = new Set(
+    state.groupMembers.filter((m) => m.groupId === groupId).map((m) => m.userId)
+  )
+  return state.users.filter((u) => ids.has(u.id))
 }
 
 export const splitTypeLabel: Record<SplitType, string> = {

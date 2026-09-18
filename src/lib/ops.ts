@@ -1,4 +1,10 @@
-import { ledgerFromExpense, ledgerFromSettlement, round, uid } from './ledger'
+import {
+  applyEntriesToBalances,
+  ledgerFromExpense,
+  ledgerFromSettlement,
+  round,
+  uid,
+} from './ledger'
 import type {
   AppState,
   Expense,
@@ -17,11 +23,14 @@ import type {
  */
 export type Op =
   | { kind: 'expense.create'; expense: Expense; shares: ExpenseShare[] }
+  | { kind: 'expense.amend'; expense: Expense; shares: ExpenseShare[] }
   | { kind: 'settlement.create'; settlement: Settlement }
   | { kind: 'settlement.confirm'; id: ID; confirmedAt: string }
   | { kind: 'movement.cancel'; target: 'expense' | 'settlement'; id: ID; inverse: LedgerEntry[] }
   | { kind: 'group.create'; group: Group; memberIds: ID[] }
   | { kind: 'group.member.add'; groupId: ID; userId: ID }
+  | { kind: 'group.member.remove'; groupId: ID; userId: ID }
+  | { kind: 'group.update'; groupId: ID; name: string; emoji: string }
   | { kind: 'profile.update'; id: ID; patch: Partial<User> }
 
 export interface QueuedOp {
@@ -40,33 +49,64 @@ export function applyOp(state: AppState, op: Op): AppState {
   switch (op.kind) {
     case 'expense.create': {
       if (state.expenses.some((e) => e.id === op.expense.id)) return state
+      const added = ledgerFromExpense(op.expense, op.shares)
       return {
         ...state,
         expenses: [...state.expenses, op.expense],
         expenseShares: [...state.expenseShares, ...op.shares],
-        ledger: [...state.ledger, ...ledgerFromExpense(op.expense, op.shares)],
+        ledger: [...state.ledger, ...added],
+        balances: applyEntriesToBalances(state.balances, state.currentUserId, added),
+      }
+    }
+
+    /**
+     * Correction d'une depense. Le serveur, lui, solde l'ancienne position par
+     * des ecritures d'ajustement puis en regenere des neuves — le grand livre
+     * y reste additif. En local on remplace directement : le solde net obtenu
+     * est le meme, et c'est lui que l'interface affiche.
+     */
+    case 'expense.amend': {
+      if (!state.expenses.some((e) => e.id === op.expense.id)) return state
+      const isOwn = (l: LedgerEntry) =>
+        l.refId === op.expense.id && (l.refType === 'expense' || l.refType === 'adjustment')
+      const removed = state.ledger.filter(isOwn)
+      const added = ledgerFromExpense(op.expense, op.shares)
+      return {
+        ...state,
+        expenses: state.expenses.map((e) => (e.id === op.expense.id ? op.expense : e)),
+        expenseShares: [
+          ...state.expenseShares.filter((s) => s.expenseId !== op.expense.id),
+          ...op.shares,
+        ],
+        ledger: [...state.ledger.filter((l) => !isOwn(l)), ...added],
+        balances: applyEntriesToBalances(state.balances, state.currentUserId, added, removed),
       }
     }
 
     case 'settlement.create': {
       if (state.settlements.some((s) => s.id === op.settlement.id)) return state
+      const added = ledgerFromSettlement(op.settlement)
       return {
         ...state,
         settlements: [...state.settlements, op.settlement],
-        ledger: [...state.ledger, ...ledgerFromSettlement(op.settlement)],
+        ledger: [...state.ledger, ...added],
+        balances: applyEntriesToBalances(state.balances, state.currentUserId, added),
       }
     }
 
-    case 'settlement.confirm':
+    case 'settlement.confirm': {
+      const touched = (e: LedgerEntry) => e.refType === 'settlement' && e.refId === op.id
+      const before = state.ledger.filter(touched)
+      const after = before.map((e) => ({ ...e, status: 'confirmed' as const }))
       return {
         ...state,
         settlements: state.settlements.map((s) =>
           s.id === op.id ? { ...s, status: 'confirmed', confirmedAt: op.confirmedAt } : s
         ),
-        ledger: state.ledger.map((e) =>
-          e.refType === 'settlement' && e.refId === op.id ? { ...e, status: 'confirmed' } : e
-        ),
+        ledger: state.ledger.map((e) => (touched(e) ? { ...e, status: 'confirmed' } : e)),
+        balances: applyEntriesToBalances(state.balances, state.currentUserId, after, before),
       }
+    }
 
     case 'movement.cancel':
       return {
@@ -80,6 +120,7 @@ export function applyOp(state: AppState, op: Op): AppState {
             ? state.settlements.map((s) => (s.id === op.id ? { ...s, cancelled: true } : s))
             : state.settlements,
         ledger: [...state.ledger, ...op.inverse],
+        balances: applyEntriesToBalances(state.balances, state.currentUserId, op.inverse),
       }
 
     case 'group.create': {
@@ -105,6 +146,22 @@ export function applyOp(state: AppState, op: Op): AppState {
         groupMembers: [...state.groupMembers, { groupId: op.groupId, userId: op.userId }],
       }
     }
+
+    case 'group.member.remove':
+      return {
+        ...state,
+        groupMembers: state.groupMembers.filter(
+          (m) => !(m.groupId === op.groupId && m.userId === op.userId)
+        ),
+      }
+
+    case 'group.update':
+      return {
+        ...state,
+        groups: state.groups.map((g) =>
+          g.id === op.groupId ? { ...g, name: op.name, emoji: op.emoji } : g
+        ),
+      }
 
     case 'profile.update':
       return {
@@ -144,6 +201,39 @@ export function buildExpenseOp(input: {
       shareAmount: round(shareAmount),
     }))
   return { kind: 'expense.create', expense, shares }
+}
+
+/**
+ * Correction d'une depense existante : on conserve l'identifiant et la date de
+ * creation, seul le contenu change.
+ */
+export function buildAmendOp(
+  previous: Expense,
+  input: {
+    amount: number
+    motive: string
+    payerId: ID
+    groupId: ID | null
+    splitType: Expense['splitType']
+    shares: Record<ID, number>
+  }
+): Op {
+  const expense: Expense = {
+    ...previous,
+    payerId: input.payerId,
+    groupId: input.groupId,
+    amount: round(input.amount),
+    motive: input.motive.trim() || previous.motive,
+    splitType: input.splitType,
+  }
+  const shares: ExpenseShare[] = Object.entries(input.shares)
+    .filter(([, v]) => round(v) > 0)
+    .map(([userId, shareAmount]) => ({
+      expenseId: expense.id,
+      userId,
+      shareAmount: round(shareAmount),
+    }))
+  return { kind: 'expense.amend', expense, shares }
 }
 
 export function buildSettlementOp(input: {

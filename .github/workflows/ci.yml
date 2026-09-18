@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Types
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm run test
+
+      # Le build verifie aussi que l'app demarre sans variables Supabase
+      # uniquement si le mode demonstration est assume (cf. OPS-6).
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_DEMO: '1'

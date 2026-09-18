@@ -105,7 +105,7 @@ export default function PWAManager() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold text-navy">Installer Hasbni</p>
-                <p className="text-xs font-medium text-navy/45">
+                <p className="text-xs font-medium text-navy/60">
                   Acces hors ligne et ouverture en plein ecran.
                 </p>
               </div>
@@ -118,7 +118,7 @@ export default function PWAManager() {
               <button
                 onClick={hideInstall}
                 aria-label="Plus tard"
-                className="rounded-lg p-1.5 text-navy/35 transition-colors hover:bg-white/50 hover:text-navy"
+                className="rounded-lg p-1.5 text-navy/55 transition-colors hover:bg-white/50 hover:text-navy"
               >
                 <X size={15} />
               </button>

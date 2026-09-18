@@ -7,10 +7,17 @@ import type { QueuedOp } from './ops'
 import type { AppState } from './types'
 
 const DB_NAME = 'hasbni'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_QUEUE = 'queue'
 const STORE_CACHE = 'cache'
+const STORE_REJECTED = 'rejected'
 const SNAPSHOT_KEY = 'snapshot'
+
+/** Operation refusee definitivement par le serveur, gardee pour l'utilisateur. */
+export interface RejectedOp extends QueuedOp {
+  reason: string
+  rejectedAt: string
+}
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -26,6 +33,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_CACHE)) {
         db.createObjectStore(STORE_CACHE)
+      }
+      if (!db.objectStoreNames.contains(STORE_REJECTED)) {
+        db.createObjectStore(STORE_REJECTED, { keyPath: 'opId' })
       }
     }
     req.onsuccess = () => resolve(req.result)
@@ -113,6 +123,48 @@ export async function bumpAttempts(item: QueuedOp): Promise<void> {
 export async function clearQueue(): Promise<void> {
   try {
     await tx(STORE_QUEUE, 'readwrite', (s) => s.clear())
+  } catch {
+    /* ignore */
+  }
+}
+
+// ── Operations refusees ────────────────────────────────────────────────────
+//
+// Avant, une operation refusee par le serveur etait simplement supprimee et
+// remplacee par un toast : l'utilisateur avait vu « enregistre », puis le
+// rafraichissement faisait disparaitre sa saisie sans trace. On la garde
+// desormais ici pour pouvoir la lui remontrer, la rejouer ou la jeter.
+
+export async function rejectOp(item: QueuedOp, reason: string): Promise<void> {
+  try {
+    await tx(STORE_REJECTED, 'readwrite', (s) =>
+      s.put({ ...item, reason, rejectedAt: new Date().toISOString() })
+    )
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function readRejected(): Promise<RejectedOp[]> {
+  try {
+    const items = await tx<RejectedOp[]>(STORE_REJECTED, 'readonly', (s) => s.getAll())
+    return [...items].sort((a, b) => b.rejectedAt.localeCompare(a.rejectedAt))
+  } catch {
+    return []
+  }
+}
+
+export async function discardRejected(opId: string): Promise<void> {
+  try {
+    await tx(STORE_REJECTED, 'readwrite', (s) => s.delete(opId))
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function clearRejected(): Promise<void> {
+  try {
+    await tx(STORE_REJECTED, 'readwrite', (s) => s.clear())
   } catch {
     /* ignore */
   }

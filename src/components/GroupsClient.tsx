@@ -2,32 +2,38 @@
 
 import clsx from 'clsx'
 import { motion } from 'framer-motion'
-import { ArrowRight, Plus, Sparkles, UsersRound, Wand2 } from 'lucide-react'
+import { ArrowRight, LogOut, Plus, Sparkles, UserMinus, UsersRound, Wand2 } from 'lucide-react'
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import AddExpenseModal from './AddExpenseModal'
 import Avatar from './Avatar'
+import ConfirmDialog from './ConfirmDialog'
 import EmptyState from './EmptyState'
 import Modal from './Modal'
 import PageHeader from './PageHeader'
 import { useApp } from '@/context/AppContext'
 import {
+  balanceOf,
   formatAmount,
   friendIds,
   groupMembersOf,
-  relationBalance,
+  simplifyFromPositions,
   simplifyGroup,
   userById,
 } from '@/lib/ledger'
+import { getSupabase } from '@/lib/supabase/client'
+import { fetchGroupPositions } from '@/lib/supabase/repo'
 import { cardHover, listItemY, listParent, pageIn } from '@/lib/motion'
 import type { ID } from '@/lib/types'
 
 export default function GroupsClient() {
-  const { state, me, createGroup, addGroupMember, toast } = useApp()
+  const { state, me, createGroup, addGroupMember, removeGroupMember, toast } = useApp()
   const [openGroup, setOpenGroup] = useState<ID | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [simplifyOpen, setSimplifyOpen] = useState<ID | null>(null)
   const [expenseGroup, setExpenseGroup] = useState<ID | null>(null)
+  const [removing, setRemoving] = useState<{ groupId: ID; userId: ID; name: string } | null>(null)
+  const [positions, setPositions] = useState<Map<ID, number> | null>(null)
 
   const [name, setName] = useState('')
   const [emoji, setEmoji] = useState('👥')
@@ -35,10 +41,37 @@ export default function GroupsClient() {
 
   const group = state.groups.find((g) => g.id === openGroup) ?? null
   const simplifyTarget = state.groups.find((g) => g.id === simplifyOpen) ?? null
-  const transfers = useMemo(
-    () => (simplifyTarget ? simplifyGroup(state, simplifyTarget.id) : []),
-    [state, simplifyTarget]
-  )
+  /**
+   * Positions calculees par Postgres.
+   *
+   * La RLS ne laisse voir au client que les ecritures ou il est partie : une
+   * simplification calculee en local ignore donc les dettes entre deux AUTRES
+   * membres et propose des transferts faux des que le groupe depasse deux
+   * personnes. On demande les positions au serveur, qui, lui, voit le groupe
+   * entier.
+   */
+  useEffect(() => {
+    if (!simplifyTarget) {
+      setPositions(null)
+      return
+    }
+    const sb = getSupabase()
+    if (!sb) return
+    let active = true
+    fetchGroupPositions(sb, simplifyTarget.id)
+      .then((p) => active && setPositions(p))
+      .catch(() => active && setPositions(null))
+    return () => {
+      active = false
+    }
+  }, [simplifyTarget])
+
+  const transfers = useMemo(() => {
+    if (!simplifyTarget) return []
+    // Repli local (mode demo, ou patch 06 pas encore applique).
+    if (!positions) return simplifyGroup(state, simplifyTarget.id)
+    return simplifyFromPositions(positions)
+  }, [state, simplifyTarget, positions])
 
   // Potes pas encore membres : ajoutables par n'importe quel membre.
   const addableToGroup = group
@@ -91,7 +124,7 @@ export default function GroupsClient() {
               const gm = groupMembersOf(state, g.id)
               const myNet = gm
                 .filter((u) => u.id !== me.id)
-                .reduce((sum, u) => sum + relationBalance(state.ledger, me.id, u.id), 0)
+                .reduce((sum, u) => sum + balanceOf(state, u.id).net, 0)
               return (
                 <motion.button
                   key={g.id}
@@ -106,7 +139,7 @@ export default function GroupsClient() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold text-navy">{g.name}</p>
-                      <p className="text-xs font-medium text-navy/45">
+                      <p className="text-xs font-medium text-navy/60">
                         {gm.length} membre{gm.length > 1 ? 's' : ''}
                       </p>
                     </div>
@@ -122,7 +155,7 @@ export default function GroupsClient() {
                     <p
                       className={clsx(
                         'text-sm font-bold',
-                        myNet > 0 ? 'text-credit' : myNet < 0 ? 'text-debit' : 'text-navy/45'
+                        myNet > 0 ? 'text-credit' : myNet < 0 ? 'text-debit' : 'text-navy/60'
                       )}
                     >
                       {myNet > 0 ? '+' : myNet < 0 ? '−' : ''}
@@ -150,7 +183,7 @@ export default function GroupsClient() {
                   setSimplifyOpen(group.id)
                   setOpenGroup(null)
                 }}
-                className="flex items-center gap-1.5 rounded-xl border border-silver tap px-3 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
+                className="flex items-center gap-1.5 rounded-xl border border-silver tap px-3 text-sm font-semibold text-navy/60 transition-colors hover:bg-white/50 hover:text-navy"
               >
                 <Wand2 size={15} /> Simplifier
               </button>
@@ -169,9 +202,9 @@ export default function GroupsClient() {
       >
         {group && (
           <div className="space-y-2">
-            <p className="text-xs font-medium text-navy/50">Membres et soldes avec toi</p>
+            <p className="text-xs font-medium text-navy/60">Membres et soldes avec toi</p>
             {groupMembersOf(state, group.id).map((u) => {
-              const net = u.id === me.id ? 0 : relationBalance(state.ledger, me.id, u.id)
+              const net = u.id === me.id ? 0 : balanceOf(state, u.id).net
               return (
                 <div key={u.id} className="glass-sm flex items-center gap-3 rounded-2xl p-3">
                   <Avatar user={u} size="md" />
@@ -179,7 +212,7 @@ export default function GroupsClient() {
                     <p className="truncate text-sm font-semibold text-navy">
                       {u.id === me.id ? 'Moi' : u.name}
                     </p>
-                    <p className="text-[11px] font-medium text-navy/45">
+                    <p className="text-[11px] font-medium text-navy/60">
                       {u.id === me.id
                         ? 'ton compte'
                         : net > 0
@@ -194,7 +227,7 @@ export default function GroupsClient() {
                       <p
                         className={clsx(
                           'text-sm font-bold',
-                          net > 0 ? 'text-credit' : net < 0 ? 'text-debit' : 'text-navy/45'
+                          net > 0 ? 'text-credit' : net < 0 ? 'text-debit' : 'text-navy/60'
                         )}
                       >
                         {net > 0 ? '+' : net < 0 ? '−' : ''}
@@ -204,20 +237,44 @@ export default function GroupsClient() {
                         href={`/relation/${u.id}`}
                         onClick={() => setOpenGroup(null)}
                         aria-label={`Ouvrir la relation avec ${u.name}`}
-                        className="rounded-lg p-1.5 text-navy/35 transition-colors hover:bg-white/60 hover:text-navy"
+                        className="rounded-lg p-1.5 text-navy/55 transition-colors hover:bg-white/60 hover:text-navy"
                       >
                         <ArrowRight size={15} />
                       </Link>
+                      {/* La politique SQL autorisait deja le retrait depuis le
+                          patch 02, mais aucun bouton ne l'appelait : un ajout
+                          par erreur etait definitif (audit CRD-5). */}
+                      {group.ownerId === me.id && (
+                        <button
+                          onClick={() =>
+                            setRemoving({ groupId: group.id, userId: u.id, name: u.name })
+                          }
+                          aria-label={`Retirer ${u.name} du groupe`}
+                          className="rounded-lg p-1.5 text-navy/55 transition-colors hover:bg-red-50 hover:text-red-600"
+                        >
+                          <UserMinus size={15} />
+                        </button>
+                      )}
                     </>
+                  )}
+                  {u.id === me.id && group.ownerId !== me.id && (
+                    <button
+                      onClick={() =>
+                        setRemoving({ groupId: group.id, userId: me.id, name: 'toi' })
+                      }
+                      className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-navy/60 transition-colors hover:bg-red-50 hover:text-red-600"
+                    >
+                      <LogOut size={13} /> Quitter
+                    </button>
                   )}
                 </div>
               )
             })}
 
             <div className="pt-2">
-              <p className="mb-1.5 text-xs font-medium text-navy/50">Ajouter un membre</p>
+              <p className="mb-1.5 text-xs font-medium text-navy/60">Ajouter un membre</p>
               {addableToGroup.length === 0 ? (
-                <p className="text-[11px] font-medium text-navy/45">
+                <p className="text-[11px] font-medium text-navy/60">
                   Tous tes potes sont deja dans ce groupe. Ajoute d&apos;abord un pote depuis
                   l&apos;onglet Profil.
                 </p>
@@ -254,7 +311,7 @@ export default function GroupsClient() {
           <div className="flex items-center justify-end gap-3">
             <button
               onClick={() => setSimplifyOpen(null)}
-              className="rounded-xl border border-silver tap px-4 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
+              className="rounded-xl border border-silver tap px-4 text-sm font-semibold text-navy/60 transition-colors hover:bg-white/50 hover:text-navy"
             >
               Fermer
             </button>
@@ -279,7 +336,7 @@ export default function GroupsClient() {
             </p>
           </div>
           {transfers.length === 0 ? (
-            <p className="py-6 text-center text-sm font-semibold text-navy/45">
+            <p className="py-6 text-center text-sm font-semibold text-navy/60">
               Tout est deja equilibre dans ce groupe.
             </p>
           ) : (
@@ -309,7 +366,7 @@ export default function GroupsClient() {
           <div className="flex items-center justify-end gap-3">
             <button
               onClick={() => setCreateOpen(false)}
-              className="rounded-xl border border-silver tap px-4 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
+              className="rounded-xl border border-silver tap px-4 text-sm font-semibold text-navy/60 transition-colors hover:bg-white/50 hover:text-navy"
             >
               Annuler
             </button>
@@ -326,11 +383,11 @@ export default function GroupsClient() {
         <div className="space-y-4">
           <div className="flex gap-3">
             <div className="w-20">
-              <label className="mb-1.5 block text-xs font-medium text-navy/50">Emoji</label>
+              <label className="mb-1.5 block text-xs font-medium text-navy/60">Emoji</label>
               <input type="text" value={emoji} onChange={(e) => setEmoji(e.target.value)} maxLength={2} />
             </div>
             <div className="flex-1">
-              <label className="mb-1.5 block text-xs font-medium text-navy/50">Nom du groupe</label>
+              <label className="mb-1.5 block text-xs font-medium text-navy/60">Nom du groupe</label>
               <input
                 type="text"
                 value={name}
@@ -341,7 +398,7 @@ export default function GroupsClient() {
           </div>
 
           <div>
-            <p className="mb-1.5 text-xs font-medium text-navy/50">Membres</p>
+            <p className="mb-1.5 text-xs font-medium text-navy/60">Membres</p>
             <div className="flex flex-wrap gap-2">
               {friendIds(state)
                 .map((id) => state.users.find((u) => u.id === id))
@@ -360,7 +417,7 @@ export default function GroupsClient() {
                         'flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-xs font-semibold transition-colors',
                         on
                           ? 'border-brand/40 bg-brand/10 text-navy'
-                          : 'border-silver text-navy/45 hover:bg-white/50 hover:text-navy'
+                          : 'border-silver text-navy/60 hover:bg-white/50 hover:text-navy'
                       )}
                     >
                       <Avatar user={u} size="sm" className="h-6 w-6 text-xs" />
@@ -377,6 +434,30 @@ export default function GroupsClient() {
         open={!!expenseGroup}
         onClose={() => setExpenseGroup(null)}
         presetGroupId={expenseGroup ?? undefined}
+      />
+
+      <ConfirmDialog
+        open={removing !== null}
+        onClose={() => setRemoving(null)}
+        onConfirm={() => {
+          if (!removing) return
+          removeGroupMember(removing.groupId, removing.userId)
+          setOpenGroup(null)
+          toast(
+            removing.userId === me.id
+              ? 'Tu as quitte le groupe'
+              : `${removing.name} retire du groupe`,
+            'info'
+          )
+        }}
+        title={removing?.userId === me.id ? 'Quitter le groupe' : 'Retirer du groupe'}
+        message={
+          removing?.userId === me.id
+            ? 'Tu ne verras plus les depenses de ce groupe. Les soldes deja crees avec ses membres restent intacts : ils sont bilateraux, pas lies au groupe.'
+            : `${removing?.name} ne pourra plus voir les depenses de ce groupe. Vos soldes existants ne changent pas.`
+        }
+        confirmLabel={removing?.userId === me.id ? 'Quitter' : 'Retirer'}
+        tone="danger"
       />
     </>
   )

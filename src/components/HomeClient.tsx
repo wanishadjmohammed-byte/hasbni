@@ -2,7 +2,7 @@
 
 import clsx from 'clsx'
 import { motion } from 'framer-motion'
-import { ArrowDownLeft, ArrowUpRight, Bell, Clock3, Plus, Search, Users } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Bell, Clock3, Plus, Search, UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import AddExpenseModal from './AddExpenseModal'
@@ -34,9 +34,9 @@ export default function HomeClient() {
   const [sort, setSort] = useState<SortKey>('recent')
   const [expenseOpen, setExpenseOpen] = useState(false)
 
-  const totals = globalTotals(state)
-  const pending = pendingForMe(state)
-  const requests = incomingRequests(state)
+  const totals = useMemo(() => globalTotals(state), [state])
+  const pending = useMemo(() => pendingForMe(state), [state])
+  const requests = useMemo(() => incomingRequests(state), [state])
   const toHandle = pending.length + requests.length
 
   const relations = useMemo(() => {
@@ -70,7 +70,7 @@ export default function HomeClient() {
           <motion.div variants={listItemY} {...cardHover} className="glass rounded-2xl p-4">
             <div className="flex items-center gap-2 text-credit">
               <ArrowDownLeft size={15} />
-              <p className="text-xs font-medium text-navy/50">On me doit</p>
+              <p className="text-xs font-medium text-navy/60">On me doit</p>
             </div>
             <p className="mt-1.5 text-2xl font-bold text-credit">{formatAmount(totals.owedToMe)}</p>
           </motion.div>
@@ -78,13 +78,13 @@ export default function HomeClient() {
           <motion.div variants={listItemY} {...cardHover} className="glass rounded-2xl p-4">
             <div className="flex items-center gap-2 text-debit">
               <ArrowUpRight size={15} />
-              <p className="text-xs font-medium text-navy/50">Je dois</p>
+              <p className="text-xs font-medium text-navy/60">Je dois</p>
             </div>
             <p className="mt-1.5 text-2xl font-bold text-debit">{formatAmount(totals.iOwe)}</p>
           </motion.div>
 
           <motion.div variants={listItemY} {...cardHover} className="glass rounded-2xl p-4">
-            <p className="text-xs font-medium text-navy/50">Balance nette</p>
+            <p className="text-xs font-medium text-navy/60">Balance nette</p>
             <p
               className={clsx(
                 'mt-1.5 text-2xl font-bold',
@@ -113,7 +113,7 @@ export default function HomeClient() {
                     ? ` et ${pending.length} remboursement${pending.length > 1 ? 's' : ''}`
                     : ''}
                 </p>
-                <p className="text-xs font-medium text-navy/45">
+                <p className="text-xs font-medium text-navy/60">
                   A traiter dans l&apos;onglet Activite.
                 </p>
               </div>
@@ -129,7 +129,7 @@ export default function HomeClient() {
           <div className="relative flex-1">
             <Search
               size={15}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy/35"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy/55"
             />
             <input
               type="search"
@@ -146,7 +146,7 @@ export default function HomeClient() {
                 onClick={() => setSort(s.key)}
                 className={clsx(
                   'relative rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
-                  sort === s.key ? 'text-white' : 'text-navy/50 hover:text-navy'
+                  sort === s.key ? 'text-white' : 'text-navy/60 hover:text-navy'
                 )}
               >
                 {sort === s.key && (
@@ -164,17 +164,26 @@ export default function HomeClient() {
 
         {/* Liste des potes */}
         {relations.length === 0 ? (
+          /* Le bouton ouvrait la modale de depense — ou l'utilisateur etait
+             seul dans la liste des participants. Le vrai premier pas est
+             d'ajouter un pote (audit UX-2). */
           <EmptyState
             icon={Users}
-            title="Aucun pote pour l'instant"
-            description="Ajoute une depense ou cree un groupe pour commencer a suivre vos comptes."
+            title={query ? 'Aucun pote a ce nom' : "Commence par ajouter un pote"}
+            description={
+              query
+                ? 'Essaie un autre nom.'
+                : "Une fois ton pote ajoute, vos depenses partagees et vos remboursements s'enregistrent ici."
+            }
             action={
-              <button
-                onClick={() => setExpenseOpen(true)}
-                className="rounded-xl bg-brand tap px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
-              >
-                Ajouter une depense
-              </button>
+              query ? undefined : (
+                <Link
+                  href="/profil?ajouter-pote=1"
+                  className="flex items-center gap-1.5 rounded-xl bg-brand tap px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
+                >
+                  <UserPlus size={16} /> Ajouter un pote
+                </Link>
+              )
             }
           />
         ) : (
@@ -186,7 +195,7 @@ export default function HomeClient() {
                     <Avatar user={r.user} size="lg" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold text-navy">{r.user.name}</p>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs font-medium text-navy/45">
+                      <div className="mt-0.5 flex items-center gap-2 text-xs font-medium text-navy/60">
                         <span suppressHydrationWarning>{relativeDate(r.lastActivity)}</span>
                         <span className="h-1 w-1 rounded-full bg-navy/20" />
                         <span>
@@ -198,20 +207,20 @@ export default function HomeClient() {
                       <p
                         className={clsx(
                           'text-lg font-bold',
-                          r.net > 0 ? 'text-credit' : r.net < 0 ? 'text-debit' : 'text-navy/45'
+                          r.net > 0 ? 'text-credit' : r.net < 0 ? 'text-debit' : 'text-navy/60'
                         )}
                       >
                         {r.net > 0 ? '+' : r.net < 0 ? '−' : ''}
                         {formatAmount(r.net)}
                       </p>
                       {r.pending !== 0 ? (
-                        <p className="flex items-center justify-end gap-1 text-[11px] font-semibold text-navy/45">
+                        <p className="flex items-center justify-end gap-1 text-[11px] font-semibold text-navy/60">
                           <Clock3 size={11} />
                           {r.pending > 0 ? '+' : '−'}
                           {formatAmount(r.pending)} en attente
                         </p>
                       ) : (
-                        <p className="text-[11px] font-medium text-navy/40">
+                        <p className="text-[11px] font-medium text-navy/60">
                           {r.net > 0 ? 'il me doit' : r.net < 0 ? 'je lui dois' : 'a jour'}
                         </p>
                       )}

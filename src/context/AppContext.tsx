@@ -11,19 +11,25 @@ import {
   type ReactNode,
 } from 'react'
 import { useAuth } from './AuthContext'
-import { uid } from '@/lib/ledger'
+import { recomputeBalances, uid } from '@/lib/ledger'
 import {
   bumpAttempts,
   clearQueue,
+  clearRejected,
   clearSnapshot,
   dequeueOp,
+  discardRejected,
   enqueueOp,
   loadSnapshot,
   readQueue,
+  readRejected,
+  rejectOp,
   saveSnapshot,
+  type RejectedOp,
 } from '@/lib/idb'
 import {
   applyOp,
+  buildAmendOp,
   buildCancelOp,
   buildExpenseOp,
   buildGroupOp,
@@ -34,6 +40,8 @@ import {
 import { buildSeed } from '@/lib/seed'
 import { getSupabase, supabaseEnabled } from '@/lib/supabase/client'
 import {
+  deleteMyAccount,
+  exportMyData,
   fetchState,
   PermanentSyncError,
   pushOp,
@@ -43,6 +51,13 @@ import {
 import type { AppState, Group, ID, SplitType, User } from '@/lib/types'
 
 const MAX_ATTEMPTS = 6
+
+/** Un retour d'onglet ne declenche pas un rechargement complet plus souvent. */
+const REFRESH_TTL_MS = 30_000
+/** Les evenements temps reel arrivent en rafale : on les regroupe. */
+const REALTIME_DEBOUNCE_MS = 600
+/** L'instantane local n'est pas reecrit a chaque frappe. */
+const SNAPSHOT_DEBOUNCE_MS = 1_000
 
 export interface NewExpenseInput {
   amount: number
@@ -77,6 +92,8 @@ interface AppContextValue {
   syncStatus: SyncStatus
   pendingSync: number
   addExpense: (input: NewExpenseInput) => void
+  /** Correction d'une depense existante — cf. `amend_expense` cote SQL. */
+  amendExpense: (expenseId: ID, input: NewExpenseInput) => void
   addSettlement: (input: NewSettlementInput) => void
   confirmSettlement: (id: ID) => void
   /** Annulation par mouvement inverse — jamais de suppression physique (CDC 3). */
@@ -87,8 +104,18 @@ interface AppContextValue {
   createGroup: (name: string, emoji: string, memberIds: ID[]) => Group
   /** N'importe quel membre du groupe peut en ajouter d'autres. */
   addGroupMember: (groupId: ID, userId: ID) => void
-  updateProfile: (patch: Partial<Pick<User, 'name' | 'phone' | 'email' | 'avatar'>>) => void
-  refresh: () => Promise<void>
+  /** Le chef retire qui il veut ; chacun peut se retirer lui-meme. */
+  removeGroupMember: (groupId: ID, userId: ID) => void
+  updateGroup: (groupId: ID, name: string, emoji: string) => void
+  /** `email` est exclu : c'est un miroir du compte (audit SEC-3). */
+  updateProfile: (patch: Partial<Pick<User, 'name' | 'phone' | 'avatar'>>) => void
+  /** Saisies refusees definitivement par le serveur, gardees en local. */
+  rejectedOps: RejectedOp[]
+  discardRejectedOp: (opId: string) => Promise<void>
+  discardAllRejected: () => Promise<void>
+  deleteAccount: () => Promise<void>
+  exportData: () => Promise<unknown>
+  refresh: (opts?: { force?: boolean }) => Promise<void>
   resetDemo: () => void
   toast: (message: string, tone?: Toast['tone']) => void
   toasts: Toast[]
@@ -108,6 +135,7 @@ const EMPTY_STATE: AppState = {
   ledger: [],
   friendRequests: [],
   friendships: [],
+  balances: [],
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -121,8 +149,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [rejected, setRejected] = useState<RejectedOp[]>([])
 
   const flushing = useRef(false)
+  const refreshing = useRef(false)
+  const lastRefreshAt = useRef(0)
+  const realtimeTimer = useRef<number | null>(null)
 
   const toast = useCallback((message: string, tone: Toast['tone'] = 'success') => {
     const id = uid('toast')
@@ -167,33 +199,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let active = true
     loadSnapshot().then((snapshot) => {
       if (!active) return
-      if (snapshot && (demo || snapshot.currentUserId === profileId)) setState(snapshot)
+      if (snapshot && (demo || snapshot.currentUserId === profileId)) {
+        // Un instantane ecrit avant l'arrivee des soldes serveur n'a pas le
+        // champ `balances` : on le reconstruit depuis le grand livre garde.
+        setState(snapshot.balances ? snapshot : { ...snapshot, balances: recomputeBalances(snapshot) })
+      }
       if (demo) setReady(true)
     })
     readQueue().then((q) => active && setPendingSync(q.length))
+    readRejected().then((r) => active && setRejected(r))
     return () => {
       active = false
     }
   }, [demo, profileId])
 
-  const refresh = useCallback(async () => {
-    const sb = getSupabase()
-    if (!sb || !profileId) return
-    try {
-      const next = await fetchState(sb, profileId)
-      setState(next)
-      setSyncError(false)
-    } catch {
-      // Hors ligne ou serveur injoignable : on garde l'instantane local.
-      setSyncError(true)
-    } finally {
-      setReady(true)
-    }
-  }, [profileId])
+  /**
+   * Rechargement complet du perimetre.
+   *
+   * `force` court-circuite la fenetre de fraicheur : on l'utilise au montage,
+   * apres une synchro et sur evenement temps reel. Les simples retours
+   * d'onglet, eux, passent par la garde — `visibilitychange` et `focus` se
+   * declenchent tous les deux au meme moment sur desktop et rechargeaient donc
+   * tout en double (audit SCL-6).
+   */
+  const refresh = useCallback(
+    async ({ force = false }: { force?: boolean } = {}) => {
+      const sb = getSupabase()
+      if (!sb || !profileId) return
+      if (refreshing.current) return
+      if (!force && Date.now() - lastRefreshAt.current < REFRESH_TTL_MS) return
+
+      refreshing.current = true
+      try {
+        const next = await fetchState(sb, profileId)
+        setState(next)
+        setSyncError(false)
+        lastRefreshAt.current = Date.now()
+      } catch {
+        // Hors ligne ou serveur injoignable : on garde l'instantane local.
+        setSyncError(true)
+      } finally {
+        refreshing.current = false
+        setReady(true)
+      }
+    },
+    [profileId]
+  )
 
   useEffect(() => {
     if (demo || !profileId) return
-    void refresh()
+    void refresh({ force: true })
   }, [demo, profileId, refresh])
 
   // Retour au premier plan : on resynchronise, au cas ou le temps reel aurait
@@ -203,6 +258,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const onVisible = () => {
       if (document.visibilityState === 'visible') void refresh()
     }
+
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
     return () => {
@@ -212,9 +268,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [demo, profileId, refresh])
 
   // ── Persistance de l'instantane ──────────────────────────────────────────
+  // Serialiser tout l'etat a chaque changement faisait ramer les appareils
+  // modestes : on attend que ca se calme (audit SCL-7).
   useEffect(() => {
     if (!ready) return
-    void saveSnapshot(state)
+    const timer = window.setTimeout(() => void saveSnapshot(state), SNAPSHOT_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
   }, [state, ready])
 
   // ── File de synchronisation ──────────────────────────────────────────────
@@ -236,10 +295,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           dirty = true
         } catch (error) {
           if (error instanceof PermanentSyncError || item.attempts + 1 >= MAX_ATTEMPTS) {
-            // Inutile d'insister : on retire l'operation et on previent.
+            // Inutile d'insister. L'operation n'est plus jetee : elle part dans
+            // la corbeille locale, d'ou l'utilisateur peut la revoir, la
+            // rejouer ou la supprimer (audit CRD-4).
+            const detail =
+              error instanceof Error ? error.message : 'Operation refusee par le serveur'
+            await rejectOp(item, detail)
             await dequeueOp(item.opId)
-            const detail = error instanceof Error ? error.message : ''
-            toast(detail ? `Refuse par le serveur : ${detail}` : 'Operation non synchronisee', 'danger')
+            setRejected(await readRejected())
+            toast('Une saisie n’a pas pu etre enregistree — voir Profil', 'danger')
             dirty = true
           } else {
             await bumpAttempts(item)
@@ -249,7 +313,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
       setPendingSync((await readQueue()).length)
-      if (dirty) await refresh()
+      if (dirty) await refresh({ force: true })
     } finally {
       flushing.current = false
       setSyncing(false)
@@ -275,27 +339,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [demo, flush])
 
   // ── Temps reel : les soldes suivent les mouvements des autres ────────────
+  //
+  // Chaque evenement declenchait un rechargement complet. Une depense de
+  // groupe a dix ecrit dix lignes de grand livre, donc dix evenements, donc
+  // dix rechargements complets — sur chacun des dix clients connectes. On
+  // regroupe desormais la rafale en un seul rechargement (audit SCL-2).
   useEffect(() => {
     const sb = getSupabase()
     if (demo || !sb || !profileId) return
 
+    const scheduleRefresh = () => {
+      if (realtimeTimer.current !== null) window.clearTimeout(realtimeTimer.current)
+      realtimeTimer.current = window.setTimeout(() => {
+        realtimeTimer.current = null
+        void refresh({ force: true })
+      }, REALTIME_DEBOUNCE_MS)
+    }
+
     const channel = sb
       .channel('hasbni-ledger')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ledger_entries' }, () =>
-        void refresh()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'settlements' }, () =>
-        void refresh()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, () =>
-        void refresh()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () =>
-        void refresh()
-      )
-      .subscribe()
+      // `expenses` n'est volontairement plus ecoute : toute depense produit
+      // deja des lignes de grand livre, l'abonnement faisait doublon.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ledger_entries' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'settlements' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, scheduleRefresh)
+      .subscribe((status) => {
+        // Sans repli, un canal tombe laissait l'app muette sans rien dire.
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setSyncError(true)
+      })
 
     return () => {
+      if (realtimeTimer.current !== null) window.clearTimeout(realtimeTimer.current)
       void sb.removeChannel(channel)
     }
   }, [demo, profileId, refresh])
@@ -333,6 +408,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch(buildExpenseOp({ ...input, createdBy: currentId }))
     },
     [dispatch, currentId]
+  )
+
+  /**
+   * Correction. Le choix produit est qu'une depense soit confirmee d'emblee,
+   * sans accord du debiteur ; la contrepartie est qu'elle reste corrigeable.
+   * Cote serveur, la correction solde l'ancienne position par des ecritures
+   * d'ajustement puis en regenere des neuves : le grand livre ne peut donc pas
+   * diverger de ce qu'affiche l'ecran.
+   */
+  const amendExpense = useCallback(
+    (expenseId: ID, input: NewExpenseInput) => {
+      setState((prev) => {
+        const previous = prev.expenses.find((e) => e.id === expenseId)
+        if (!previous) return prev
+        const op = buildAmendOp(previous, input)
+        if (!demo) {
+          const item = envelope(op)
+          void enqueueOp(item).then(async () => {
+            setPendingSync((await readQueue()).length)
+            if (navigator.onLine) void flush()
+          })
+        }
+        return applyOp(prev, op)
+      })
+    },
+    [demo, flush]
   )
 
   const addSettlement = useCallback(
@@ -400,6 +501,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [dispatch]
   )
 
+  const removeGroupMember = useCallback(
+    (groupId: ID, userId: ID) => dispatch({ kind: 'group.member.remove', groupId, userId }),
+    [dispatch]
+  )
+
+  const updateGroup = useCallback(
+    (groupId: ID, name: string, emoji: string) =>
+      dispatch({ kind: 'group.update', groupId, name, emoji }),
+    [dispatch]
+  )
+
+  const discardRejectedOp = useCallback(async (opId: string) => {
+    await discardRejected(opId)
+    setRejected(await readRejected())
+  }, [])
+
+  const discardAllRejected = useCallback(async () => {
+    await clearRejected()
+    setRejected([])
+  }, [])
+
+  const deleteAccount = useCallback(async () => {
+    const sb = getSupabase()
+    if (!sb || demo) throw new Error('Indisponible en mode demonstration')
+    await deleteMyAccount(sb)
+    await clearQueue()
+    await clearSnapshot()
+    await clearRejected()
+    await sb.auth.signOut()
+  }, [demo])
+
+  const exportData = useCallback(async () => {
+    const sb = getSupabase()
+    if (!sb || demo) return state
+    return exportMyData(sb)
+  }, [demo, state])
+
   const updateProfile = useCallback(
     (patch: Partial<User>) => dispatch({ kind: 'profile.update', id: currentId, patch }),
     [dispatch, currentId]
@@ -436,6 +574,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       syncStatus,
       pendingSync,
       addExpense,
+      amendExpense,
       addSettlement,
       confirmSettlement,
       cancelMovement,
@@ -443,7 +582,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       respondToRequest,
       createGroup,
       addGroupMember,
+      removeGroupMember,
+      updateGroup,
       updateProfile,
+      rejectedOps: rejected,
+      discardRejectedOp,
+      discardAllRejected,
+      deleteAccount,
+      exportData,
       refresh,
       resetDemo,
       toast,
@@ -461,6 +607,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       syncStatus,
       pendingSync,
       addExpense,
+      amendExpense,
       addSettlement,
       confirmSettlement,
       cancelMovement,
@@ -468,7 +615,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       respondToRequest,
       createGroup,
       addGroupMember,
+      removeGroupMember,
+      updateGroup,
       updateProfile,
+      rejected,
+      discardRejectedOp,
+      discardAllRejected,
+      deleteAccount,
+      exportData,
       refresh,
       resetDemo,
       toast,

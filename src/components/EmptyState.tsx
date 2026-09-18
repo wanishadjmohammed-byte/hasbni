@@ -18,7 +18,7 @@ export default function EmptyState({
         <Icon size={22} />
       </div>
       <p className="text-sm font-bold text-navy">{title}</p>
-      <p className="mt-1 max-w-xs text-xs font-medium text-navy/45">{description}</p>
+      <p className="mt-1 max-w-xs text-xs font-medium text-navy/60">{description}</p>
       {action && <div className="mt-4">{action}</div>}
     </div>
   )

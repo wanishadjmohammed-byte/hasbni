@@ -17,7 +17,7 @@ export default function PageHeader({
         {leading}
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-xl font-bold tracking-tight text-navy">{title}</h1>
-          {subtitle && <div className="mt-0.5 text-xs font-medium text-navy/50">{subtitle}</div>}
+          {subtitle && <div className="mt-0.5 text-xs font-medium text-navy/60">{subtitle}</div>}
         </div>
         {action}
       </div>

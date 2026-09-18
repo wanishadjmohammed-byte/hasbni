@@ -10,19 +10,24 @@ npm install
 npm run dev            # http://localhost:3000 — mode demonstration
 ```
 
-Sans variables d'environnement, l'app tourne en **mode demonstration** : jeu de donnees local
-(Souhil, Mosaab, Yacine…), persistance IndexedDB, aucune requete reseau.
+Le **mode demonstration** (jeu de donnees local, persistance IndexedDB, aucune requete
+reseau) demande `NEXT_PUBLIC_DEMO=1`. En production, un build sans variables Supabase et
+sans ce drapeau echoue volontairement : une app deployee avec des potes fictifs ressemble
+a une app qui marche.
 
 ### Brancher Supabase
 
 1. Creer un projet sur [supabase.com](https://supabase.com).
-2. Coller `supabase/schema.sql` dans l'editeur SQL et l'executer (tables, triggers, RLS,
-   realtime).
+2. Coller `supabase/schema.sql` dans l'editeur SQL et l'executer. **Ce fichier suffit** :
+   il contient l'etat consolide (tables, contraintes, triggers, RPC, RLS, vue des soldes,
+   realtime). Les anciens patches sont archives dans `supabase/patches/` et ne doivent
+   pas etre rejoues.
 3. `cp .env.example .env.local` puis renseigner `NEXT_PUBLIC_SUPABASE_URL` et
    `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Project Settings > API).
 4. Redemarrer `npm run dev` — les variables ne sont lues qu'au demarrage.
 
-Si le schema a deja ete execute, lancer aussi `supabase/patch-02-potes.sql`.
+**Base deja en service ?** Executer `supabase/patch-06-durcissement.sql`, le seul patch
+non encore applique. Il est idempotent.
 
 L'authentification est **email + mot de passe** (provider Email, actif par defaut). Pour tester a
 plusieurs sans boite mail, desactiver **Authentication > Sign In / Providers > Email > Confirm
@@ -69,6 +74,19 @@ suppression physique), DA arrondi a l'unite, reste d'arrondi au payeur.
 - **Le grand livre n'est jamais ecrit par le client** : des triggers derivent les entrees
   bilaterales depuis les parts de depense et les remboursements. Le solde d'une relation reste
   `SUM(ledger_entries confirmes entre A et B)`.
+- **Les soldes sont calcules par Postgres** (vue `relation_balances`). Le client ne charge
+  qu'une fenetre recente de mouvements, pour la timeline — pas tout l'historique.
+- **Creation et correction d'une depense sont transactionnelles** (`create_expense`,
+  `amend_expense`) : jamais de depense sans ses parts, jamais de montant modifie sans que le
+  grand livre suive. Une correction solde l'ancienne position par des ecritures d'ajustement
+  puis en regenere des neuves — le journal reste strictement additif.
+- **Qui peut figurer sur une depense** : `can_share_with()` exige un lien d'amitie ou un
+  groupe commun. Sans ca, connaitre un identifiant de profil suffisait a fabriquer une dette
+  contre son proprietaire.
+- **L'email du profil est un miroir en lecture seule** de `auth.users.email` : c'est la cle
+  de recherche des demandes de pote, la laisser modifiable permettait de squatter une adresse.
+- **Suppression de compte non destructrice** : anonymisation, `deleted_at`, cles en RESTRICT.
+  Les soldes des potes restent justes.
 - **RLS** (CDC 5.3) : `current_profile_id()`, `is_group_member()`, `shares_context()` et
   `can_see_expense()` sont `SECURITY DEFINER` pour eviter les recursions de politiques. On ne voit
   que les relations et groupes dont on fait partie.
@@ -111,7 +129,24 @@ Palette dans `tailwind.config.ts`, utilitaires dans `src/app/globals.css` :
 Classes : `.glass`, `.glass-sm`, `.glass-sidebar`, `.glass-nav`, `.blob-1/2/3`.
 Animations : variantes partagees dans `src/lib/motion.ts`.
 
+## Verification
+
+```bash
+npm run verify        # types + lint + tests
+npm run test:watch
+```
+
+Les tests couvrent le coeur comptable : repartition avec reste, signe et statut des soldes,
+idempotence du reducteur d'operations (rejouer une operation ne double jamais un montant),
+correction d'une depense, et simplification de groupe. La CI GitHub Actions rejoue tout
+plus le build.
+
 ## Reste a faire
 
-- Notifications push (CDC 5.1, V1.1) — retirees pour l'instant.
+- **Notifications** (CDC 5.1) : personne n'est prevenu d'une depense le concernant. C'est
+  le maillon manquant de la boucle produit, reporte jusqu'a la mise sur l'App Store.
+- Parcours d'invitation : ajouter un pote suppose aujourd'hui qu'il ait deja un compte,
+  a l'adresse exacte qu'on tape.
+- Migrations Supabase CLI a la place du copier-coller dans l'editeur SQL.
+- Interface d'administration (comportement utilisateur, sante du grand livre).
 - Points ouverts du CDC 8 : multi-devises, groupe sans compte, confidentialite intra-groupe.

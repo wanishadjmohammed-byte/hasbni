@@ -24,7 +24,7 @@ export default function Sidebar() {
           </div>
           <div className="leading-tight">
             <p className="text-base font-bold tracking-tight text-navy">Hasbni</p>
-            <p className="text-[10px] font-medium text-navy/45">حسبني</p>
+            <p className="text-[10px] font-medium text-navy/60">حسبني</p>
           </div>
         </Link>
       </div>
@@ -67,7 +67,7 @@ export default function Sidebar() {
 
       <div className="mt-auto space-y-3 p-3">
         <div className="glass-sm rounded-2xl p-3">
-          <p className="text-xs font-medium text-navy/50">Balance nette</p>
+          <p className="text-xs font-medium text-navy/60">Balance nette</p>
           <p
             className={clsx(
               'mt-1 text-lg font-bold',
@@ -77,7 +77,7 @@ export default function Sidebar() {
             {totals.net > 0 ? '+' : totals.net < 0 ? '−' : ''}
             {formatAmount(totals.net)}
           </p>
-          <div className="mt-2 space-y-0.5 text-[11px] font-medium text-navy/45">
+          <div className="mt-2 space-y-0.5 text-[11px] font-medium text-navy/60">
             <p>On me doit {formatAmount(totals.owedToMe)}</p>
             <p>Je dois {formatAmount(totals.iOwe)}</p>
           </div>
@@ -90,7 +90,7 @@ export default function Sidebar() {
           <Avatar user={me} size="sm" />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-navy">{me.name}</p>
-            <p className="truncate text-[11px] text-navy/45">Mon compte</p>
+            <p className="truncate text-[11px] text-navy/60">Mon compte</p>
           </div>
         </Link>
       </div>

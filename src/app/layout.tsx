@@ -7,8 +7,9 @@ import { AuthProvider } from '@/context/AuthContext'
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // `maximumScale: 1` + `userScalable: false` bloquaient le zoom a deux
+  // doigts : echec WCAG 1.4.4, et un probleme reel pour lire des montants
+  // (audit UX-7). Le zoom est rendu a l'utilisateur.
   viewportFit: 'cover',
   themeColor: '#22A06B',
 }

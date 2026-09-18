@@ -34,7 +34,7 @@ export default function BottomNav() {
             <span className="relative">
               <Icon
                 size={19}
-                className={clsx('transition-colors', active ? 'text-brand' : 'text-navy/45')}
+                className={clsx('transition-colors', active ? 'text-brand' : 'text-navy/60')}
               />
               {href === '/activite' && badge > 0 && (
                 <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-white ring-2 ring-white/70">
@@ -45,7 +45,7 @@ export default function BottomNav() {
             <span
               className={clsx(
                 'text-[10px] font-semibold transition-colors',
-                active ? 'text-brand' : 'text-navy/45'
+                active ? 'text-brand' : 'text-navy/60'
               )}
             >
               {label}

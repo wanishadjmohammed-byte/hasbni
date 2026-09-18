@@ -10,9 +10,10 @@ import Sidebar from './Sidebar'
 import Toasts from './Toasts'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
+import { installGlobalErrorHandlers } from '@/lib/report'
 
 /** Ecrans plein ecran, sans navigation. */
-const BARE_ROUTES = ['/login', '/offline', '/invite']
+const BARE_ROUTES = ['/login', '/offline']
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
@@ -21,6 +22,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const { ready: dataReady } = useApp()
 
   const bare = BARE_ROUTES.some((r) => pathname.startsWith(r))
+
+  // Promesses rejetees et erreurs hors React : sans ca, elles disparaissaient
+  // dans la console de l'utilisateur (audit OPS-3).
+  useEffect(() => installGlobalErrorHandlers(), [])
 
   // Avec Supabase configure, tout l'espace applicatif exige une session.
   useEffect(() => {
@@ -57,7 +62,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   <AlertTriangle size={22} />
                 </div>
                 <p className="text-sm font-bold text-navy">Profil introuvable</p>
-                <p className="mt-1 text-xs font-medium text-navy/45">
+                <p className="mt-1 text-xs font-medium text-navy/60">
                   Ton compte existe, mais aucune ligne dans <code>profiles</code>. Le fichier
                   <code> supabase/schema.sql</code> a-t-il bien ete execute dans l&apos;editeur
                   SQL ?

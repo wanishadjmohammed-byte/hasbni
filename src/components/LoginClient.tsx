@@ -79,7 +79,7 @@ export default function LoginClient() {
             <MailCheck size={22} />
           </div>
           <h1 className="text-lg font-bold text-navy">Verifie tes emails</h1>
-          <p className="mt-1 text-xs font-medium text-navy/45">
+          <p className="mt-1 text-xs font-medium text-navy/60">
             On a envoye un lien de confirmation a <span className="font-semibold">{email}</span>.
             Clique dessus, puis reviens te connecter.
           </p>
@@ -106,7 +106,7 @@ export default function LoginClient() {
               ح
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-navy">Hasbni</h1>
-            <p className="mt-1 text-xs font-medium text-navy/50">
+            <p className="mt-1 text-xs font-medium text-navy/60">
               Qui doit quoi, sans prise de tete.
             </p>
           </motion.div>
@@ -123,7 +123,7 @@ export default function LoginClient() {
                 onClick={() => switchTab(key)}
                 className={clsx(
                   'relative flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition-colors',
-                  tab === key ? 'text-white' : 'text-navy/50 hover:text-navy'
+                  tab === key ? 'text-white' : 'text-navy/60 hover:text-navy'
                 )}
               >
                 {tab === key && (
@@ -149,7 +149,7 @@ export default function LoginClient() {
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden"
                 >
-                  <label className="mb-1.5 block text-xs font-medium text-navy/50">
+                  <label className="mb-1.5 block text-xs font-medium text-navy/60">
                     Ton prenom
                   </label>
                   <input
@@ -164,7 +164,7 @@ export default function LoginClient() {
             </AnimatePresence>
 
             <motion.div variants={listItemY}>
-              <label className="mb-1.5 block text-xs font-medium text-navy/50">Email</label>
+              <label className="mb-1.5 block text-xs font-medium text-navy/60">Email</label>
               <input
                 type="email"
                 value={email}
@@ -176,7 +176,7 @@ export default function LoginClient() {
             </motion.div>
 
             <motion.div variants={listItemY}>
-              <label className="mb-1.5 block text-xs font-medium text-navy/50">
+              <label className="mb-1.5 block text-xs font-medium text-navy/60">
                 Mot de passe
               </label>
               <div className="relative">
@@ -193,7 +193,7 @@ export default function LoginClient() {
                   type="button"
                   onClick={() => setShowPassword((s) => !s)}
                   aria-label={showPassword ? 'Masquer' : 'Afficher'}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-navy/35 transition-colors hover:bg-white/50 hover:text-navy"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-navy/55 transition-colors hover:bg-white/50 hover:text-navy"
                 >
                   {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
@@ -226,7 +226,7 @@ export default function LoginClient() {
 
           <motion.p
             variants={listItemY}
-            className="mt-4 text-center text-[11px] font-medium text-navy/40"
+            className="mt-4 text-center text-[11px] font-medium text-navy/60"
           >
             {mode === 'demo' ? (
               'Mode demonstration — aucune donnee n’est envoyee.'
