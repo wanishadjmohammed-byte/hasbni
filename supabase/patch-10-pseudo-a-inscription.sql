@@ -106,3 +106,14 @@ begin
   end loop;
   perform set_config('hasbni.identity_write', 'off', true);
 end $$;
+
+-- ────────────────────────────────────────────────────────────────────────────
+--  Rechargement du cache de schema de PostgREST.
+--
+--  PostgREST garde en memoire la liste des fonctions exposees. Une fonction
+--  fraichement creee reste invisible pour l'API tant qu'il ne l'a pas relue —
+--  l'app recoit alors « Could not find the function public.… » alors que la
+--  fonction existe bel et bien en base. Cette ligne le force a relire.
+-- ────────────────────────────────────────────────────────────────────────────
+
+notify pgrst, 'reload schema';

@@ -9,6 +9,23 @@ type SB = SupabaseClient<Database>
 /** Erreur non rejouable : l'operation est abandonnee au lieu d'etre retentee. */
 export class PermanentSyncError extends Error {}
 
+/**
+ * La fonction SQL n'existe pas dans ce projet.
+ *
+ * Deux causes, et le message doit permettre de les distinguer : le patch n'a
+ * pas ete execute, ou PostgREST n'a pas relu son cache de schema — il garde en
+ * memoire la liste des fonctions exposees, et une fonction fraichement creee
+ * lui reste invisible jusqu'au rechargement.
+ */
+export class MissingFunctionError extends Error {
+  constructor(fn: string, patch: string) {
+    super(
+      `La fonction « ${fn} » est absente. Executer ${patch} dans l'editeur SQL Supabase, ` +
+        `puis « notify pgrst, 'reload schema'; » si l'erreur persiste.`
+    )
+  }
+}
+
 const RETRYABLE_CODES = new Set(['08000', '08006', '08003', '57014', '40001', '40P01'])
 
 /**
@@ -325,6 +342,9 @@ export async function searchProfiles(
   const { data, error } = await request
   if (error) {
     if (error.message.toLowerCase().includes('abort')) return []
+    if (isMissingFunction(error)) {
+      throw new MissingFunctionError('search_profiles', 'supabase/patch-09-pseudos-et-recherche.sql')
+    }
     throw new Error(translatePostgresError(error.message))
   }
 
@@ -341,7 +361,15 @@ export async function searchProfiles(
 /** Demande de pote a partir d'un identifiant renvoye par la recherche. */
 export async function sendFriendRequestTo(sb: SB, profileId: ID): Promise<'sent' | 'accepted'> {
   const { data, error } = await sb.rpc('send_friend_request_to', { p_profile_id: profileId })
-  if (error) throw new Error(translatePostgresError(error.message))
+  if (error) {
+    if (isMissingFunction(error)) {
+      throw new MissingFunctionError(
+        'send_friend_request_to',
+        'supabase/patch-09-pseudos-et-recherche.sql'
+      )
+    }
+    throw new Error(translatePostgresError(error.message))
+  }
   return (data as 'sent' | 'accepted') ?? 'sent'
 }
 
@@ -362,6 +390,12 @@ export async function isUsernameAvailable(
   const { data, error } = await request
   if (error) {
     if (error.message.toLowerCase().includes('abort')) return false
+    if (isMissingFunction(error)) {
+      throw new MissingFunctionError(
+        'username_available',
+        'supabase/patch-10-pseudo-a-inscription.sql'
+      )
+    }
     throw new Error(translatePostgresError(error.message))
   }
   return Boolean(data)
@@ -370,7 +404,12 @@ export async function isUsernameAvailable(
 /** Choix du pseudo. Format, unicite et cadence sont verifies cote serveur. */
 export async function setUsername(sb: SB, username: string): Promise<string> {
   const { data, error } = await sb.rpc('set_username', { p_username: username })
-  if (error) throw new Error(translatePostgresError(error.message))
+  if (error) {
+    if (isMissingFunction(error)) {
+      throw new MissingFunctionError('set_username', 'supabase/patch-09-pseudos-et-recherche.sql')
+    }
+    throw new Error(translatePostgresError(error.message))
+  }
   return (data as string) ?? username
 }
 

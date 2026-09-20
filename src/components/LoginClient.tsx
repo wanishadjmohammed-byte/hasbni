@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { getSupabase } from '@/lib/supabase/client'
-import { isUsernameAvailable } from '@/lib/supabase/repo'
+import { isUsernameAvailable, MissingFunctionError } from '@/lib/supabase/repo'
 import { listItemY, listParent, pageIn } from '@/lib/motion'
 
 type Tab = 'signin' | 'signup'
@@ -25,6 +25,15 @@ export default function LoginClient() {
   /** null = pas encore verifie. */
   const [available, setAvailable] = useState<boolean | null>(null)
   const [checking, setChecking] = useState(false)
+  /**
+   * La verification est indisponible (patch non applique cote base).
+   *
+   * Sans ce drapeau, `available` restait a `null` et le bouton d'inscription
+   * demeurait desactive pour toujours, sans un mot d'explication : impossible
+   * de creer un compte. On laisse donc passer — le trigger SQL deduplique de
+   * toute facon le pseudo a l'insertion.
+   */
+  const [checkDown, setCheckDown] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -66,9 +75,16 @@ export default function LoginClient() {
       if (!sb) return
       try {
         const free = await isUsernameAvailable(sb, username, next.signal)
-        if (!next.signal.aborted) setAvailable(free)
-      } catch {
-        if (!next.signal.aborted) setAvailable(null)
+        if (!next.signal.aborted) {
+          setAvailable(free)
+          setCheckDown(false)
+        }
+      } catch (e) {
+        if (next.signal.aborted) return
+        setAvailable(null)
+        // Fonction absente : on n'a plus les moyens de verifier, mais on ne
+        // bloque pas l'inscription pour autant.
+        if (e instanceof MissingFunctionError) setCheckDown(true)
       } finally {
         if (!next.signal.aborted) setChecking(false)
       }
@@ -83,7 +99,8 @@ export default function LoginClient() {
     mode === 'demo' ||
     (email.trim().length > 3 &&
       password.length >= 6 &&
-      (tab === 'signin' || (name.trim().length > 0 && usernameOk && available === true)))
+      (tab === 'signin' ||
+        (name.trim().length > 0 && usernameOk && (available === true || checkDown))))
 
   const submit = async () => {
     setError(null)

@@ -31,6 +31,11 @@ a une app qui marche.
 `supabase/patch-08-droits-et-groupes.sql`, `supabase/patch-09-pseudos-et-recherche.sql`,
 `supabase/patch-10-pseudo-a-inscription.sql`. Tous idempotents.
 
+Pour verifier ce qui est reellement applique : coller `supabase/diagnostic.sql`
+dans l'editeur SQL — lecture seule. Si une fonction existe en base mais que
+l'app repond « Could not find the function public.… », c'est le cache de schema
+de PostgREST : executer `notify pgrst, 'reload schema';`.
+
 L'authentification est **email + mot de passe** (provider Email, actif par defaut). Pour tester a
 plusieurs sans boite mail, desactiver **Authentication > Sign In / Providers > Email > Confirm
 email** : les comptes sont alors utilisables immediatement.
