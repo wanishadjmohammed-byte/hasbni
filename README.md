@@ -28,7 +28,8 @@ a une app qui marche.
 
 **Base deja en service ?** Executer, dans l'ordre :
 `supabase/patch-06-durcissement.sql`, `supabase/patch-07-admin.sql`,
-`supabase/patch-08-droits-et-groupes.sql`. Tous idempotents.
+`supabase/patch-08-droits-et-groupes.sql`, `supabase/patch-09-pseudos-et-recherche.sql`.
+Tous idempotents.
 
 L'authentification est **email + mot de passe** (provider Email, actif par defaut). Pour tester a
 plusieurs sans boite mail, desactiver **Authentication > Sign In / Providers > Email > Confirm
@@ -47,7 +48,7 @@ saisi a l'inscription.
 | Remboursement — saisie + confirmation bilaterale | modale | 2.5 |
 | Groupes — membres, soldes, bouton « Simplifier » | `/groupes` | 2.6 / 2.7 |
 | Activite — tous les mouvements, file de confirmation | `/activite` | — |
-| Profil — compte, potes, demande par email, etat de synchro | `/profil` | — |
+| Profil — compte, pseudo, potes, recherche, etat de synchro | `/profil` | — |
 | Connexion / inscription — email + mot de passe | `/login` | 4 (flow 1) |
 
 **Une depense appartient a celui qui a paye.** Lui seul peut l'annuler ou la
@@ -135,6 +136,21 @@ Palette dans `tailwind.config.ts`, utilitaires dans `src/app/globals.css` :
 
 Classes : `.glass`, `.glass-sm`, `.glass-sidebar`, `.glass-nav`, `.blob-1/2/3`.
 Animations : variantes partagees dans `src/lib/motion.ts`.
+
+## Trouver un pote
+
+Chacun a un **pseudo** public (`@youba`), choisi dans Profil. La recherche se
+fait par DEBUT de pseudo ou de nom, jamais par sous-chaine — et c'est le coeur
+de sa tenue en charge : un index btree sait servir `like 'abc%'` en descendant
+l'arbre, alors que `like '%abc%'` l'ignore et balaye toute la table, a chaque
+caractere tape par chaque utilisateur.
+
+Les garde-fous, cote serveur (`search_profiles`) : trois caracteres minimum,
+dix resultats maximum, et ni email ni telephone dans la reponse — la recherche
+est ouverte a tous, elle ne doit pas devenir un annuaire de coordonnees. Cote
+client : anti-rebond de 300 ms et abandon de la requete precedente, pour qu'une
+frappe rapide ne parte pas en rafale et qu'une reponse lente n'ecrase pas une
+plus recente.
 
 ## Console d'administration — `/admin`
 

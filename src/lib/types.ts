@@ -9,6 +9,8 @@ export type ID = string
 export interface User {
   id: ID
   name: string
+  /** Identifiant public court, en minuscules. Sert a se trouver entre potes. */
+  username?: string
   /** Compte supprime : la ligne survit pour que l'historique des potes reste juste. */
   deletedAt?: string
   phone?: string
@@ -118,6 +120,16 @@ export interface RelationBalance {
   projected: number
   lastActivity: string
   movementCount: number
+}
+
+/** Resultat de recherche : volontairement sans email ni telephone. */
+export interface ProfileSearchResult {
+  profileId: ID
+  username: string
+  name: string
+  avatar?: string
+  color?: string
+  relation: 'none' | 'sent' | 'received' | 'friend'
 }
 
 export interface AppState {

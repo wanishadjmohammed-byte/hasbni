@@ -17,14 +17,14 @@ import {
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import AddFriendModal from './AddFriendModal'
 import Avatar from './Avatar'
 import ConfirmDialog from './ConfirmDialog'
 import FriendRequests from './FriendRequests'
-import Modal from './Modal'
 import PageHeader from './PageHeader'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
-import { formatAmount, globalTotals, outgoingRequests, relationSummaries } from '@/lib/ledger'
+import { formatAmount, globalTotals, relationSummaries } from '@/lib/ledger'
 import { cardHover, listItemY, listParent, pageIn } from '@/lib/motion'
 
 /** Libelle lisible d'une operation refusee. */
@@ -60,12 +60,12 @@ export default function ProfileClient() {
     state,
     me,
     updateProfile,
-    addFriend,
     resetDemo,
     toast,
     syncStatus,
     pendingSync,
     refresh,
+    changeUsername,
     rejectedOps,
     discardRejectedOp,
     discardAllRejected,
@@ -82,16 +82,16 @@ export default function ProfileClient() {
 
   const [friendOpen, setFriendOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [fEmail, setFEmail] = useState('')
-  const [fBusy, setFBusy] = useState(false)
-  const [fError, setFError] = useState<string | null>(null)
+  const [username, setUsernameField] = useState(me.username ?? '')
+  const [uBusy, setUBusy] = useState(false)
+  const [uError, setUError] = useState<string | null>(null)
+  const [uSaved, setUSaved] = useState(false)
 
   useEffect(() => {
     if (searchParams.get('ajouter-pote')) setFriendOpen(true)
   }, [searchParams])
 
   const totals = globalTotals(state)
-  const sentRequests = outgoingRequests(state)
   const relations = relationSummaries(state)
 
   const now = new Date()
@@ -108,6 +108,23 @@ export default function ProfileClient() {
     // sert de cle pour les demandes de pote (audit SEC-3).
     updateProfile({ name, phone, avatar })
     toast('Profil mis a jour')
+  }
+
+  const saveUsername = async () => {
+    if (uBusy) return
+    setUBusy(true)
+    setUError(null)
+    setUSaved(false)
+    try {
+      const saved = await changeUsername(username)
+      setUsernameField(saved)
+      setUSaved(true)
+      toast('Pseudo mis a jour')
+    } catch (e) {
+      setUError(e instanceof Error ? e.message : 'Pseudo refuse')
+    } finally {
+      setUBusy(false)
+    }
   }
 
   const download = async () => {
@@ -140,27 +157,8 @@ export default function ProfileClient() {
     router.replace('/login')
   }
 
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fEmail.trim())
 
-  const submitFriend = async () => {
-    if (!emailValid || fBusy) return
-    setFBusy(true)
-    setFError(null)
-    try {
-      const result = await addFriend(fEmail)
-      toast(
-        result === 'accepted'
-          ? 'Vous etes potes !'
-          : 'Demande envoyee — il doit l’accepter dans l’app'
-      )
-      setFriendOpen(false)
-      setFEmail('')
-    } catch (e) {
-      setFError(e instanceof Error ? e.message : 'Erreur inconnue')
-    } finally {
-      setFBusy(false)
-    }
-  }
+
 
   return (
     <>
@@ -203,6 +201,52 @@ export default function ProfileClient() {
                 onChange={(e) => setAvatar(e.target.value)}
               />
             </div>
+            <div className="sm:col-span-2">
+              <label htmlFor="profile-username" className="mb-1.5 block text-xs font-medium text-navy/60">
+                Pseudo
+              </label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-navy/55">
+                    @
+                  </span>
+                  <input
+                    id="profile-username"
+                    type="text"
+                    value={username}
+                    maxLength={20}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    onChange={(e) => {
+                      // Le serveur n'accepte que ce jeu de caracteres : autant
+                      // l'appliquer a la frappe plutot que refuser apres coup.
+                      setUsernameField(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''))
+                      setUError(null)
+                      setUSaved(false)
+                    }}
+                    className="!pl-7"
+                  />
+                </div>
+                <button
+                  onClick={() => void saveUsername()}
+                  disabled={uBusy || username === (me.username ?? '') || username.length < 3}
+                  className="tap shrink-0 rounded-xl border border-silver px-3 text-xs font-semibold text-navy/60 transition-colors hover:bg-white/50 hover:text-navy disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {uBusy ? <Loader2 size={14} className="animate-spin" /> : 'Choisir'}
+                </button>
+              </div>
+              {uError ? (
+                <p className="mt-1 text-[11px] font-semibold text-debit">{uError}</p>
+              ) : (
+                <p className="mt-1 text-[11px] font-medium text-navy/60">
+                  {uSaved
+                    ? 'Pseudo enregistre.'
+                    : "C'est par la que tes potes te trouvent. 3 a 20 caracteres."}
+                </p>
+              )}
+            </div>
+
             <div>
               <label className="mb-1.5 block text-xs font-medium text-navy/60">Telephone</label>
               <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
@@ -430,81 +474,7 @@ export default function ProfileClient() {
         tone="danger"
       />
 
-      <Modal
-        open={friendOpen}
-        onClose={() => {
-          setFriendOpen(false)
-          setFError(null)
-        }}
-        title="Ajouter un pote"
-        subtitle="Il recevra une demande dans l'app"
-        footer={
-          <div className="flex items-center justify-end gap-3">
-            <button
-              onClick={() => {
-                setFriendOpen(false)
-                setFError(null)
-              }}
-              className="tap rounded-xl border border-silver px-4 text-sm font-semibold text-navy/60 transition-colors hover:bg-white/50 hover:text-navy"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={() => void submitFriend()}
-              disabled={!emailValid || fBusy}
-              className="tap rounded-xl bg-brand px-5 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {fBusy ? <Loader2 size={16} className="animate-spin" /> : 'Envoyer'}
-            </button>
-          </div>
-        }
-      >
-        <div className="space-y-3">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-navy/60">
-              Email de ton pote
-            </label>
-            <input
-              type="email"
-              value={fEmail}
-              onChange={(e) => {
-                setFEmail(e.target.value)
-                setFError(null)
-              }}
-              placeholder="souhil@exemple.dz"
-              autoCapitalize="none"
-              onKeyDown={(e) => e.key === 'Enter' && void submitFriend()}
-            />
-          </div>
-
-          {fError && (
-            <p className="rounded-xl bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-500">
-              {fError}
-            </p>
-          )}
-
-          <p className="text-[11px] font-medium text-navy/60">
-            Il doit deja avoir un compte Hasbni avec cet email.
-          </p>
-
-          {sentRequests.length > 0 && (
-            <div className="glass-sm rounded-2xl p-3">
-              <p className="mb-2 text-xs font-medium text-navy/60">Demandes envoyees</p>
-              <div className="space-y-2">
-                {sentRequests.map(({ request, user }) => (
-                  <div key={request.id} className="flex items-center gap-2.5">
-                    <Avatar user={user} size="sm" />
-                    <span className="flex-1 truncate text-sm font-semibold text-navy">
-                      {user.name}
-                    </span>
-                    <span className="text-[11px] font-semibold text-navy/60">en attente</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </Modal>
+      <AddFriendModal open={friendOpen} onClose={() => setFriendOpen(false)} />
     </>
   )
 }

@@ -14,6 +14,7 @@ export type ProfileRow = {
   created_by: string | null
   created_at: string
   deleted_at: string | null
+  username: string | null
 }
 
 export type GroupRow = {
@@ -129,6 +130,19 @@ export interface Database {
     }
     Functions: {
       send_friend_request: { Args: { target_email: string }; Returns: string }
+      send_friend_request_to: { Args: { p_profile_id: string }; Returns: string }
+      set_username: { Args: { p_username: string }; Returns: string }
+      search_profiles: {
+        Args: { p_query: string }
+        Returns: {
+          profile_id: string
+          username: string
+          name: string
+          avatar: string | null
+          color: string | null
+          relation: 'none' | 'sent' | 'received' | 'friend'
+        }[]
+      }
       respond_friend_request: { Args: { request_id: string; accept: boolean }; Returns: string }
       create_group: {
         Args: { p_name: string; p_emoji: string; p_member_ids: string[]; p_group_id: string }

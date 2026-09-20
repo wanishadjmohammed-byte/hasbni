@@ -47,9 +47,12 @@ import {
   PermanentSyncError,
   pushOp,
   respondFriendRequest,
+  searchProfiles,
   sendFriendRequest,
+  sendFriendRequestTo,
+  setUsername,
 } from '@/lib/supabase/repo'
-import type { AppState, Group, ID, SplitType, User } from '@/lib/types'
+import type { AppState, Group, ID, ProfileSearchResult, SplitType, User } from '@/lib/types'
 
 const MAX_ATTEMPTS = 6
 
@@ -101,6 +104,12 @@ interface AppContextValue {
   cancelMovement: (kind: 'expense' | 'settlement', id: ID) => void
   /** Demande de pote par email. Leve une erreur lisible si l'email est inconnu. */
   addFriend: (email: string) => Promise<'sent' | 'accepted'>
+  /** Recherche par debut de pseudo ou de nom — bornee a dix resultats. */
+  searchPotes: (query: string, signal?: AbortSignal) => Promise<ProfileSearchResult[]>
+  /** Demande de pote a partir d'un resultat de recherche. */
+  addFriendById: (profileId: ID) => Promise<'sent' | 'accepted'>
+  /** Choix du pseudo public. */
+  changeUsername: (username: string) => Promise<string>
   respondToRequest: (requestId: ID, accept: boolean) => Promise<void>
   createGroup: (name: string, emoji: string, memberIds: ID[]) => Group
   /** N'importe quel membre du groupe peut en ajouter d'autres. */
@@ -503,6 +512,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [demo, refresh]
   )
 
+  const searchPotes = useCallback(
+    async (query: string, signal?: AbortSignal) => {
+      const sb = getSupabase()
+      if (!sb || demo) return []
+      return searchProfiles(sb, query, signal)
+    },
+    [demo]
+  )
+
+  const addFriendById = useCallback(
+    async (profileId: ID) => {
+      const sb = getSupabase()
+      if (!sb || demo) {
+        throw new Error('Les demandes de pote necessitent un compte Supabase')
+      }
+      const result = await sendFriendRequestTo(sb, profileId)
+      track('friend_request_sent', { outcome: result, via: 'search' })
+      await refresh({ force: true })
+      return result
+    },
+    [demo, refresh]
+  )
+
+  const changeUsername = useCallback(
+    async (username: string) => {
+      const sb = getSupabase()
+      if (!sb || demo) throw new Error('Indisponible en mode demonstration')
+      const saved = await setUsername(sb, username)
+      await refresh({ force: true })
+      return saved
+    },
+    [demo, refresh]
+  )
+
   const respondToRequest = useCallback(
     async (requestId: ID, accept: boolean) => {
       const sb = getSupabase()
@@ -612,6 +655,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       confirmSettlement,
       cancelMovement,
       addFriend,
+      searchPotes,
+      addFriendById,
+      changeUsername,
       respondToRequest,
       createGroup,
       addGroupMember,
@@ -646,6 +692,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       confirmSettlement,
       cancelMovement,
       addFriend,
+      searchPotes,
+      addFriendById,
+      changeUsername,
       respondToRequest,
       createGroup,
       addGroupMember,

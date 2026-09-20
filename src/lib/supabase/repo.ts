@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from './database.types'
 import type { Op } from '../ops'
 import { recomputeBalances } from '../ledger'
-import type { AppState, ID, RelationBalance } from '../types'
+import type { AppState, ID, ProfileSearchResult, RelationBalance } from '../types'
 
 type SB = SupabaseClient<Database>
 
@@ -86,6 +86,12 @@ export function translatePostgresError(message: string): string {
   }
   if (m.includes('expenses_motive_length') || m.includes('settlements_note_length')) {
     return 'Le texte est trop long.'
+  }
+  if (m.includes('pseudo est deja pris')) {
+    return 'Ce pseudo est deja pris.'
+  }
+  if (m.includes('le pseudo doit faire')) {
+    return 'Pseudo : 3 a 20 caracteres, lettres, chiffres, point ou tiret bas.'
   }
   if (m.includes('failed to fetch') || m.includes('network')) {
     return 'Pas de reseau.'
@@ -179,6 +185,7 @@ export async function fetchState(sb: SB, profileId: ID): Promise<AppState> {
       color: p.color ?? undefined,
       createdBy: p.created_by ?? undefined,
       deletedAt: p.deleted_at ?? undefined,
+      username: p.username ?? undefined,
     })),
     groups: (groups.data ?? []).map((g) => ({
       id: g.id,
@@ -288,6 +295,61 @@ export async function respondFriendRequest(
 ): Promise<void> {
   const { error } = await sb.rpc('respond_friend_request', { request_id: requestId, accept })
   if (error) throw new Error(translatePostgresError(error.message))
+}
+
+/** Nombre minimum de caracteres avant d'interroger le serveur. */
+export const SEARCH_MIN_CHARS = 3
+
+/**
+ * Recherche de potes par debut de pseudo ou de nom.
+ *
+ * Tout le travail est fait par Postgres, sur index, et borne a dix lignes :
+ * le client ne telecharge jamais d'annuaire. En dessous de trois caracteres on
+ * n'appelle meme pas — un prefixe plus court ne discrimine rien et ramenerait
+ * une part enorme de la table.
+ *
+ * `signal` permet d'abandonner une requete devenue obsolete : en frappant
+ * vite, seule la derniere compte.
+ */
+export async function searchProfiles(
+  sb: SB,
+  query: string,
+  signal?: AbortSignal
+): Promise<ProfileSearchResult[]> {
+  const needle = query.trim()
+  if (needle.length < SEARCH_MIN_CHARS) return []
+
+  let request = sb.rpc('search_profiles', { p_query: needle })
+  if (signal) request = request.abortSignal(signal)
+
+  const { data, error } = await request
+  if (error) {
+    if (error.message.toLowerCase().includes('abort')) return []
+    throw new Error(translatePostgresError(error.message))
+  }
+
+  return (data ?? []).map((r) => ({
+    profileId: r.profile_id,
+    username: r.username,
+    name: r.name,
+    avatar: r.avatar ?? undefined,
+    color: r.color ?? undefined,
+    relation: r.relation,
+  }))
+}
+
+/** Demande de pote a partir d'un identifiant renvoye par la recherche. */
+export async function sendFriendRequestTo(sb: SB, profileId: ID): Promise<'sent' | 'accepted'> {
+  const { data, error } = await sb.rpc('send_friend_request_to', { p_profile_id: profileId })
+  if (error) throw new Error(translatePostgresError(error.message))
+  return (data as 'sent' | 'accepted') ?? 'sent'
+}
+
+/** Choix du pseudo. Format, unicite et cadence sont verifies cote serveur. */
+export async function setUsername(sb: SB, username: string): Promise<string> {
+  const { data, error } = await sb.rpc('set_username', { p_username: username })
+  if (error) throw new Error(translatePostgresError(error.message))
+  return (data as string) ?? username
 }
 
 /** Suppression de compte : anonymisation, jamais d'effacement (audit SEC-5). */
