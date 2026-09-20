@@ -218,6 +218,41 @@ qui pourrait attribuer son activite a quelqu'un d'autre.
 Agregation journaliere : `POST /api/admin/rollup` avec l'en-tete
 `x-rollup-secret`, a brancher sur un cron.
 
+## Deployer une mise a jour
+
+`git push`. C'est tout — rien a faire cote appareils, et surtout personne n'a a
+supprimer puis reinstaller son raccourci.
+
+Au retour au premier plan, l'app verifie s'il y a du neuf (au plus une fois par
+heure). Si oui, un bandeau « Nouvelle version disponible » apparait ; un tap
+bascule et recharge. Les donnees locales — instantane et file de
+synchronisation — sont conservees.
+
+Quatre choses sont necessaires pour qu'une PWA deja installee se mette a jour,
+et il en manquait quatre :
+
+1. **L'URL du service worker change a chaque build** (`/sw.js?v=<build>`,
+   l'identifiant vient de `next.config.ts`). Sinon le navigateur compare un
+   fichier souvent identique et conclut qu'il n'y a rien de neuf — c'est ce qui
+   obligeait a reinstaller le raccourci.
+2. **`updateViaCache: 'none'`** a l'enregistrement : sans ca, `sw.js` lui-meme
+   peut etre servi depuis le cache HTTP pendant des heures.
+3. **Un `update()` explicite** au retour au premier plan. Une PWA installee sur
+   iPhone n'est jamais fermee, seulement suspendue : elle peut passer des
+   semaines sans jamais verifier.
+4. **Une invite.** Meme installe, le nouveau service worker ATTEND que l'ancien
+   soit libere, ce qui n'arrive quasiment jamais sur mobile. On ne bascule pas
+   d'office : remplacer les fichiers sous une page ouverte fait demander a
+   l'ancien code des morceaux qui n'existent plus.
+
+Les charges utiles React Server Components ne sont jamais mises en cache :
+elles decrivent le rendu des pages, et les servir depuis le cache reafficherait
+l'ancienne interface apres une mise a jour.
+
+Si un appareil reste bloque malgre tout, `/admin` et l'app partagent le meme
+domaine : ouvrir le site dans Safari (pas le raccourci) force une navigation
+reseau et declenche la bascule.
+
 ## Verification
 
 ```bash

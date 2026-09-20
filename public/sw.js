@@ -2,7 +2,11 @@
    Strategie : app shell precachee, navigations en network-first avec repli
    hors ligne, statiques Next en cache-first, reste en stale-while-revalidate. */
 
-const VERSION = 'hasbni-v3'
+/* La version vient de l'URL d'enregistrement (`/sw.js?v=<build>`), pas d'une
+   constante a incrementer a la main. Un oubli de bump laissait les appareils
+   deja installes sur l'ancienne version, sans que rien ne le signale. */
+const BUILD = new URL(self.location.href).searchParams.get('v') || 'dev'
+const VERSION = `hasbni-${BUILD}`
 const SHELL_CACHE = `${VERSION}-shell`
 const STATIC_CACHE = `${VERSION}-static`
 const PAGES_CACHE = `${VERSION}-pages`
@@ -24,8 +28,12 @@ self.addEventListener('install', (event) => {
       .open(SHELL_CACHE)
       .then((cache) => cache.addAll(APP_SHELL.map((u) => new Request(u, { cache: 'reload' }))))
       .catch(() => undefined)
-      .then(() => self.skipWaiting())
   )
+  /* Pas de `skipWaiting()` ici. Prendre la main d'office remplace les fichiers
+     sous une page deja ouverte : l'ancien code se met alors a demander des
+     morceaux qui n'existent plus. Le nouveau service worker attend, l'app
+     propose « Nouvelle version », et c'est l'utilisateur qui declenche la
+     bascule (message `SKIP_WAITING`). */
 })
 
 self.addEventListener('activate', (event) => {
@@ -96,6 +104,10 @@ self.addEventListener('fetch', (event) => {
   // On ne touche ni aux appels Supabase ni aux autres origines.
   if (url.origin !== self.location.origin) return
   if (url.pathname.startsWith('/api/')) return
+  /* Charges utiles React Server Components : elles decrivent le rendu des
+     pages. Les servir depuis le cache, c'est reafficher l'ancienne interface
+     apres une mise a jour. */
+  if (url.searchParams.has('_rsc') || request.headers.get('RSC') === '1') return
   // La console d'administration n'est jamais mise en cache : elle affiche des
   // donnees vivantes, et son contenu n'a rien a faire dans le stockage d'un
   // appareil.
