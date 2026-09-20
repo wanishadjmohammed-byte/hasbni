@@ -69,7 +69,7 @@ export default function SettlementModal({
         <div className="flex items-center justify-end gap-3">
           <button
             onClick={onClose}
-            className="rounded-xl border border-silver tap px-4 text-sm font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
+            className="rounded-xl border border-silver tap px-4 text-sm font-semibold text-navy/60 transition-colors hover:bg-white/50 hover:text-navy"
           >
             Annuler
           </button>
@@ -88,7 +88,7 @@ export default function SettlementModal({
           <Avatar user={other} size="md" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-navy">{other.name}</p>
-            <p className="text-xs font-medium text-navy/50">
+            <p className="text-xs font-medium text-navy/60">
               {net > 0
                 ? `Il te doit ${formatAmount(net)}`
                 : net < 0
@@ -99,7 +99,7 @@ export default function SettlementModal({
         </div>
 
         <div>
-          <p className="mb-1.5 text-xs font-medium text-navy/50">Sens du remboursement</p>
+          <p className="mb-1.5 text-xs font-medium text-navy/60">Sens du remboursement</p>
           <div className="grid grid-cols-2 gap-2">
             {(
               [
@@ -114,7 +114,7 @@ export default function SettlementModal({
                   'rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors',
                   direction === key
                     ? 'border-brand/45 bg-brand/10 text-navy'
-                    : 'border-silver text-navy/50 hover:bg-white/50 hover:text-navy'
+                    : 'border-silver text-navy/60 hover:bg-white/50 hover:text-navy'
                 )}
               >
                 {label}
@@ -124,7 +124,7 @@ export default function SettlementModal({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-navy/50">Montant (DA)</label>
+          <label className="mb-1.5 block text-xs font-medium text-navy/60">Montant (DA)</label>
           <input
             type="number"
             inputMode="numeric"
@@ -135,7 +135,7 @@ export default function SettlementModal({
           {net !== 0 && (
             <button
               onClick={() => setAmount(String(Math.abs(net)))}
-              className="mt-2 rounded-lg border border-silver px-2.5 py-1 text-[11px] font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy"
+              className="mt-2 rounded-lg border border-silver px-2.5 py-1 text-[11px] font-semibold text-navy/60 transition-colors hover:bg-white/50 hover:text-navy"
             >
               Solder tout : {formatAmount(net)}
             </button>
@@ -143,7 +143,7 @@ export default function SettlementModal({
         </div>
 
         <div>
-          <p className="mb-1.5 text-xs font-medium text-navy/50">Moyen</p>
+          <p className="mb-1.5 text-xs font-medium text-navy/60">Moyen</p>
           <div className="grid grid-cols-2 gap-2">
             {(
               [
@@ -158,7 +158,7 @@ export default function SettlementModal({
                   'flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors',
                   method === key
                     ? 'border-brand/45 bg-brand/10 text-navy'
-                    : 'border-silver text-navy/50 hover:bg-white/50 hover:text-navy'
+                    : 'border-silver text-navy/60 hover:bg-white/50 hover:text-navy'
                 )}
               >
                 <Icon size={15} />
@@ -169,7 +169,7 @@ export default function SettlementModal({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-navy/50">Note (optionnel)</label>
+          <label className="mb-1.5 block text-xs font-medium text-navy/60">Note (optionnel)</label>
           <input
             type="text"
             value={note}

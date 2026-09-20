@@ -37,7 +37,7 @@ export default function FriendRequests({ title = 'Demandes de pote' }: { title?:
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium text-navy/50">{title}</p>
+      <p className="text-xs font-medium text-navy/60">{title}</p>
       {requests.map(({ request, user }) => (
         <motion.div key={request.id} {...cardHover} className="glass rounded-2xl p-4">
           <div className="flex items-center gap-3">
@@ -46,7 +46,7 @@ export default function FriendRequests({ title = 'Demandes de pote' }: { title?:
               <p className="truncate text-sm font-bold text-navy">
                 {user.name} veut etre ton pote
               </p>
-              <p className="truncate text-xs font-medium text-navy/45" suppressHydrationWarning>
+              <p className="truncate text-xs font-medium text-navy/60" suppressHydrationWarning>
                 {user.email ?? 'compte Hasbni'} · {relativeDate(request.createdAt)}
               </p>
             </div>
@@ -54,7 +54,7 @@ export default function FriendRequests({ title = 'Demandes de pote' }: { title?:
               onClick={() => void answer(request.id, false, user.name)}
               disabled={busy === request.id}
               aria-label="Refuser"
-              className="tap rounded-xl border border-silver px-3 text-xs font-semibold text-navy/45 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+              className="tap rounded-xl border border-silver px-3 text-xs font-semibold text-navy/60 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
             >
               <X size={15} />
             </button>

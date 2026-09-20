@@ -13,6 +13,7 @@ export type ProfileRow = {
   color: string | null
   created_by: string | null
   created_at: string
+  deleted_at: string | null
 }
 
 export type GroupRow = {
@@ -87,6 +88,14 @@ export type FriendshipRow = {
   created_at: string
 }
 
+export type RelationBalanceRow = {
+  other_id: string
+  net: number
+  projected: number
+  last_activity: string
+  movement_count: number
+}
+
 type Table<Row> = {
   Row: Row
   Insert: Partial<Row>
@@ -112,7 +121,12 @@ export interface Database {
       friend_requests: Table<FriendRequestRow>
       friendships: Table<FriendshipRow>
     }
-    Views: Empty
+    Views: {
+      relation_balances: {
+        Row: RelationBalanceRow
+        Relationships: []
+      }
+    }
     Functions: {
       send_friend_request: { Args: { target_email: string }; Returns: string }
       respond_friend_request: { Args: { request_id: string; accept: boolean }; Returns: string }
@@ -124,6 +138,44 @@ export interface Database {
         Args: { p_group_id: string; p_user_id: string }
         Returns: undefined
       }
+      remove_group_member: {
+        Args: { p_group_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      rename_group: {
+        Args: { p_group_id: string; p_name: string; p_emoji: string }
+        Returns: undefined
+      }
+      create_expense: {
+        Args: {
+          p_id: string
+          p_group_id: string | null
+          p_payer_id: string
+          p_amount: number
+          p_motive: string
+          p_split_type: 'equal' | 'custom' | 'items'
+          p_shares: { user_id: string; share_amount: number }[]
+          p_created_at: string
+        }
+        Returns: string
+      }
+      amend_expense: {
+        Args: {
+          p_id: string
+          p_amount: number
+          p_motive: string
+          p_split_type: 'equal' | 'custom' | 'items'
+          p_shares: { user_id: string; share_amount: number }[]
+          p_group_id: string | null
+        }
+        Returns: string
+      }
+      group_positions: {
+        Args: { p_group_id: string }
+        Returns: { user_id: string; net_position: number }[]
+      }
+      delete_my_account: { Args: Record<string, never>; Returns: undefined }
+      export_my_data: { Args: Record<string, never>; Returns: unknown }
     }
     Enums: {
       split_type: 'equal' | 'custom' | 'items'

@@ -96,6 +96,10 @@ self.addEventListener('fetch', (event) => {
   // On ne touche ni aux appels Supabase ni aux autres origines.
   if (url.origin !== self.location.origin) return
   if (url.pathname.startsWith('/api/')) return
+  // La console d'administration n'est jamais mise en cache : elle affiche des
+  // donnees vivantes, et son contenu n'a rien a faire dans le stockage d'un
+  // appareil.
+  if (url.pathname.startsWith('/admin')) return
 
   if (request.mode === 'navigate') {
     event.respondWith(networkFirst(request))

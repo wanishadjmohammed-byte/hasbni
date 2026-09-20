@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { track } from '@/lib/analytics'
 import { getSupabase, supabaseEnabled } from '@/lib/supabase/client'
 import { fetchMyProfileId } from '@/lib/supabase/repo'
 import type { ID } from '@/lib/types'
@@ -141,6 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const sb = getSupabase()
       if (!sb) return 'signed-in'
 
+      track('signup_started')
       const { data, error } = await sb.auth.signUp({
         email: email.trim(),
         password,
@@ -150,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) throw new Error(translateError(error.message))
 
       // Sans session, c'est que la confirmation par email est activee.
+      track('signup_completed', { needsConfirmation: !data.session })
       return data.session ? 'signed-in' : 'confirm-email'
     },
     []
@@ -160,6 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!sb) return
     const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password })
     if (error) throw new Error(translateError(error.message))
+    track('login')
   }, [])
 
   const signOut = useCallback(async () => {

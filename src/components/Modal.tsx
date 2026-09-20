@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { backdropIn, modalIn } from '@/lib/motion'
 
@@ -28,17 +28,51 @@ export default function Modal({
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
+  const panel = useRef<HTMLDivElement | null>(null)
+  const restoreFocus = useRef<HTMLElement | null>(null)
+
   useEffect(() => {
     if (!open) return
+
+    // Le focus restait derriere la modale : au clavier on continuait a
+    // parcourir la page en dessous (audit UX-7).
+    restoreFocus.current = document.activeElement as HTMLElement | null
+    const focusables = () =>
+      Array.from(
+        panel.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ) ?? []
+      ).filter((el) => el.offsetParent !== null)
+
+    const timer = window.setTimeout(() => focusables()[0]?.focus(), 50)
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const items = focusables()
+      if (items.length === 0) return
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
+
     window.addEventListener('keydown', onKey)
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
+      window.clearTimeout(timer)
       window.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
+      restoreFocus.current?.focus?.()
     }
   }, [open, onClose])
 
@@ -57,6 +91,7 @@ export default function Modal({
           />
           <motion.div
             {...modalIn}
+            ref={panel}
             role="dialog"
             aria-modal="true"
             aria-label={title}
@@ -72,12 +107,12 @@ export default function Modal({
             <div className="flex items-start gap-3 border-b border-white/50 bg-white/20 px-5 py-3.5 backdrop-blur-sm sm:py-4">
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-base font-bold text-navy">{title}</h2>
-                {subtitle && <p className="mt-0.5 text-xs font-medium text-navy/50">{subtitle}</p>}
+                {subtitle && <p className="mt-0.5 text-xs font-medium text-navy/60">{subtitle}</p>}
               </div>
               <button
                 onClick={onClose}
                 aria-label="Fermer"
-                className="tap -mr-1.5 flex items-center justify-center rounded-xl text-navy/45 transition-colors hover:bg-white/50 hover:text-navy"
+                className="tap -mr-1.5 flex items-center justify-center rounded-xl text-navy/60 transition-colors hover:bg-white/50 hover:text-navy"
               >
                 <X size={20} />
               </button>

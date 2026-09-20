@@ -1,14 +1,12 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
-import AppShell from '@/components/AppShell'
-import { AppProvider } from '@/context/AppContext'
-import { AuthProvider } from '@/context/AuthContext'
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // `maximumScale: 1` + `userScalable: false` bloquaient le zoom a deux
+  // doigts : echec WCAG 1.4.4, et un probleme reel pour lire des montants
+  // (audit UX-7). Le zoom est rendu a l'utilisateur.
   viewportFit: 'cover',
   themeColor: '#22A06B',
 }
@@ -33,16 +31,18 @@ export const metadata: Metadata = {
   },
 }
 
+/**
+ * Racine minimale.
+ *
+ * Les fournisseurs de l'app (session, etat, file de synchro, temps reel) sont
+ * descendus dans le groupe `(app)` : la console d'administration partage le
+ * meme domaine mais n'a rien a faire d'un contexte PWA, d'un abonnement temps
+ * reel ou d'une base IndexedDB.
+ */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
-      <body>
-        <AuthProvider>
-          <AppProvider>
-            <AppShell>{children}</AppShell>
-          </AppProvider>
-        </AuthProvider>
-      </body>
+      <body>{children}</body>
     </html>
   )
 }

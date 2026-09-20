@@ -10,6 +10,7 @@ import {
   HandCoins,
   Landmark,
   MessageCircle,
+  Pencil,
   Plus,
   Receipt,
   Undo2,
@@ -18,19 +19,23 @@ import Link from 'next/link'
 import { useState } from 'react'
 import AddExpenseModal from './AddExpenseModal'
 import Avatar from './Avatar'
+import ConfirmDialog from './ConfirmDialog'
 import EmptyState from './EmptyState'
 import PageHeader from './PageHeader'
 import SettlementModal from './SettlementModal'
 import { useApp } from '@/context/AppContext'
 import { daysSince, relativeDate } from '@/lib/date'
-import { formatAmount, relationBalance, relationMovements } from '@/lib/ledger'
+import { balanceOf, formatAmount, relationMovements } from '@/lib/ledger'
 import { cardHover, listItemY, listParent, pageIn } from '@/lib/motion'
-import type { ID } from '@/lib/types'
+import type { ID, Movement } from '@/lib/types'
 
 export default function RelationClient({ userId }: { userId: ID }) {
   const { state, me, confirmSettlement, cancelMovement, toast } = useApp()
   const [expenseOpen, setExpenseOpen] = useState(false)
   const [settleOpen, setSettleOpen] = useState(false)
+  const [editing, setEditing] = useState<ID | null>(null)
+  const [confirming, setConfirming] = useState<Movement | null>(null)
+  const [cancelling, setCancelling] = useState<Movement | null>(null)
 
   const other = state.users.find((u) => u.id === userId)
 
@@ -54,9 +59,18 @@ export default function RelationClient({ userId }: { userId: ID }) {
     )
   }
 
-  const net = relationBalance(state.ledger, me.id, other.id)
-  const projected = relationBalance(state.ledger, me.id, other.id, { includePending: true })
+  const { net, projected } = balanceOf(state, other.id)
   const movements = relationMovements(state, other.id)
+
+  /**
+   * Seuls l'auteur et le payeur peuvent corriger — c'est ce que verifie aussi
+   * `amend_expense` cote SQL.
+   */
+  const canEdit = (m: Movement) => {
+    if (m.kind !== 'expense') return false
+    const exp = state.expenses.find((e) => e.id === m.id)
+    return Boolean(exp && !exp.cancelled && (exp.createdBy === me.id || exp.payerId === me.id))
+  }
 
   const reminder = () => {
     const days = movements[0] ? daysSince(movements[0].createdAt) : 0
@@ -64,7 +78,15 @@ export default function RelationClient({ userId }: { userId: ID }) {
       net > 0
         ? `Salut ${other.name} 👋 petit rappel Hasbni : il reste ${formatAmount(net)} entre nous${days > 0 ? ` (ca fait ${days} j)` : ''}. Rani nestenak 🙂`
         : `Salut ${other.name} 👋 je te dois ${formatAmount(net)}, je te rends ca vite inchallah.`
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
+    // Sans numero, WhatsApp ouvre son selecteur de contacts et oblige a
+    // retrouver la personne a la main (audit UX-9).
+    const digits = (other.phone ?? '').replace(/[^\d]/g, '')
+    const to = digits.length >= 9 ? digits : ''
+    window.open(
+      `https://wa.me/${to}?text=${encodeURIComponent(text)}`,
+      '_blank',
+      'noopener,noreferrer'
+    )
     toast('Message de rappel pret sur WhatsApp', 'info')
   }
 
@@ -75,7 +97,7 @@ export default function RelationClient({ userId }: { userId: ID }) {
           <Link
             href="/"
             aria-label="Retour"
-            className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-navy/45 transition-colors hover:bg-white/50 hover:text-navy lg:hidden"
+            className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-navy/60 transition-colors hover:bg-white/50 hover:text-navy lg:hidden"
           >
             <ArrowLeft size={20} />
           </Link>
@@ -90,7 +112,7 @@ export default function RelationClient({ userId }: { userId: ID }) {
         action={
           <button
             onClick={reminder}
-            className="hidden items-center gap-1.5 rounded-xl border border-silver px-3 py-2.5 text-xs font-semibold text-navy/50 transition-colors hover:bg-white/50 hover:text-navy sm:flex"
+            className="hidden items-center gap-1.5 rounded-xl border border-silver px-3 py-2.5 text-xs font-semibold text-navy/60 transition-colors hover:bg-white/50 hover:text-navy sm:flex"
           >
             <MessageCircle size={14} /> Rappel
           </button>
@@ -146,14 +168,14 @@ export default function RelationClient({ userId }: { userId: ID }) {
                       <div className="flex items-start gap-3">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-bold text-navy">{m.label}</p>
-                          <p className="mt-0.5 text-xs font-medium text-navy/45">
+                          <p className="mt-0.5 text-xs font-medium text-navy/60">
                             {isExpense
                               ? `${payer?.id === me.id ? 'Tu as' : `${payer?.name} a`} paye ${formatAmount(m.totalAmount ?? 0)} pour ${m.participantsCount} pers.`
                               : `${m.payerId === me.id ? 'Tu as rendu' : `${payer?.name} t'a rendu`} ${formatAmount(m.amount)} en ${m.method === 'transfer' ? 'virement' : 'especes'}`}
                           </p>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             <span
-                              className="text-[11px] font-medium text-navy/40"
+                              className="text-[11px] font-medium text-navy/60"
                               suppressHydrationWarning
                             >
                               {relativeDate(m.createdAt)}
@@ -180,34 +202,42 @@ export default function RelationClient({ userId }: { userId: ID }) {
                         </div>
                       </div>
 
-                      {(m.awaitingMe || m.status === 'pending') && (
-                        <div className="mt-3 flex items-center gap-2 border-t border-white/50 pt-3">
-                          {m.awaitingMe ? (
-                            <button
-                              onClick={() => {
-                                confirmSettlement(m.id)
-                                toast('Remboursement confirme')
-                              }}
-                              className="flex items-center gap-1.5 rounded-xl bg-brand px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
-                            >
-                              <Check size={13} /> Confirmer la reception
-                            </button>
-                          ) : (
-                            <p className="text-[11px] font-medium text-navy/45">
-                              En attente de confirmation de {other.name}
-                            </p>
-                          )}
+                      {/* Cette barre d'actions etait conditionnee a
+                          `awaitingMe || status === 'pending'`. Une depense
+                          naissant « confirmee », le bouton Annuler n'y
+                          apparaissait JAMAIS : une faute de frappe etait
+                          definitive (audit CRD-1). Elle est desormais
+                          toujours offerte, et la correction avec (CRD-3). */}
+                      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/50 pt-3">
+                        {m.awaitingMe ? (
                           <button
-                            onClick={() => {
-                              cancelMovement(m.kind, m.id)
-                              toast('Mouvement annule par ecriture inverse', 'danger')
-                            }}
-                            className="ml-auto flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-navy/45 transition-colors hover:bg-red-50 hover:text-red-500"
+                            onClick={() => setConfirming(m)}
+                            className="flex items-center gap-1.5 rounded-xl bg-brand px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
                           >
-                            <Undo2 size={13} /> Annuler
+                            <Check size={13} /> Confirmer la reception
                           </button>
-                        </div>
-                      )}
+                        ) : m.status === 'pending' ? (
+                          <p className="text-[11px] font-medium text-navy/60">
+                            En attente de confirmation de {other.name}
+                          </p>
+                        ) : null}
+
+                        {canEdit(m) && (
+                          <button
+                            onClick={() => setEditing(m.id)}
+                            className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-navy/60 transition-colors hover:bg-white/60 hover:text-navy"
+                          >
+                            <Pencil size={13} /> Corriger
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => setCancelling(m)}
+                          className="ml-auto flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-navy/60 transition-colors hover:bg-red-50 hover:text-red-600"
+                        >
+                          <Undo2 size={13} /> Annuler
+                        </button>
+                      </div>
                     </motion.div>
                   </motion.div>
                 )
@@ -226,7 +256,7 @@ export default function RelationClient({ userId }: { userId: ID }) {
           className="glass mx-auto flex max-w-2xl items-center gap-3 rounded-2xl p-4"
         >
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-navy/50">Solde net</p>
+            <p className="text-xs font-medium text-navy/60">Solde net</p>
             <p
               className={clsx(
                 'text-xl font-bold',
@@ -235,12 +265,12 @@ export default function RelationClient({ userId }: { userId: ID }) {
             >
               {net > 0 ? '+' : net < 0 ? '−' : ''}
               {formatAmount(net)}
-              <span className="ml-2 text-xs font-semibold text-navy/45">
+              <span className="ml-2 text-xs font-semibold text-navy/60">
                 {net > 0 ? `${other.name} te doit` : net < 0 ? `tu dois a ${other.name}` : 'a jour'}
               </span>
             </p>
             {projected !== net && (
-              <p className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-navy/45">
+              <p className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-navy/60">
                 <Clock3 size={11} /> Previsionnel {projected > 0 ? '+' : '−'}
                 {formatAmount(projected)} avec les mouvements en attente
               </p>
@@ -249,7 +279,7 @@ export default function RelationClient({ userId }: { userId: ID }) {
           <button
             onClick={reminder}
             aria-label="Envoyer un rappel"
-            className="rounded-xl border border-silver p-2.5 text-navy/50 transition-colors hover:bg-white/50 hover:text-navy sm:hidden"
+            className="rounded-xl border border-silver p-2.5 text-navy/60 transition-colors hover:bg-white/50 hover:text-navy sm:hidden"
           >
             <MessageCircle size={16} />
           </button>
@@ -261,7 +291,47 @@ export default function RelationClient({ userId }: { userId: ID }) {
         onClose={() => setExpenseOpen(false)}
         presetParticipant={other.id}
       />
+      <AddExpenseModal
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        expenseId={editing ?? undefined}
+      />
       <SettlementModal open={settleOpen} onClose={() => setSettleOpen(false)} otherId={other.id} />
+
+      <ConfirmDialog
+        open={confirming !== null}
+        onClose={() => setConfirming(null)}
+        onConfirm={() => {
+          if (!confirming) return
+          confirmSettlement(confirming.id)
+          toast('Remboursement confirme')
+        }}
+        title="Confirmer la reception"
+        message={
+          confirming
+            ? `Tu confirmes avoir recu ${formatAmount(confirming.amount)} de ${other.name} ? Le solde sera reduit d'autant, et c'est definitif.`
+            : ''
+        }
+        confirmLabel="Oui, j'ai recu"
+      />
+
+      <ConfirmDialog
+        open={cancelling !== null}
+        onClose={() => setCancelling(null)}
+        onConfirm={() => {
+          if (!cancelling) return
+          cancelMovement(cancelling.kind, cancelling.id)
+          toast(`« ${cancelling.label} » annule — le solde est revenu en arriere`, 'danger')
+        }}
+        title="Annuler ce mouvement"
+        message={
+          cancelling
+            ? `« ${cancelling.label} » (${formatAmount(cancelling.amount)}) sera annule par une ecriture inverse. L'historique garde la trace des deux lignes.`
+            : ''
+        }
+        confirmLabel="Annuler le mouvement"
+        tone="danger"
+      />
     </>
   )
 }

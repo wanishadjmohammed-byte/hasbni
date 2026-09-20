@@ -9,6 +9,8 @@ export type ID = string
 export interface User {
   id: ID
   name: string
+  /** Compte supprime : la ligne survit pour que l'historique des potes reste juste. */
+  deletedAt?: string
   phone?: string
   email?: string
   avatar?: string // emoji ou URL ; a defaut on affiche l'initiale
@@ -99,6 +101,25 @@ export interface Friendship {
   userHigh: ID
 }
 
+/**
+ * Solde d'une relation, calcule par Postgres (vue `relation_balances`).
+ *
+ * Le grand livre charge par le client est desormais une FENETRE — les N
+ * derniers mouvements, pour la timeline. Les soldes ne peuvent donc plus en
+ * etre deduits : ils viennent du serveur, qui lui voit tout l'historique. Les
+ * operations locales appliquent leur delta ici en meme temps qu'au grand livre
+ * (cf. `applyEntriesToBalances`), pour que la saisie reste optimiste.
+ */
+export interface RelationBalance {
+  otherId: ID
+  /** > 0 : il me doit ; < 0 : je lui dois. Mouvements confirmes uniquement. */
+  net: number
+  /** Idem, en incluant les mouvements en attente. */
+  projected: number
+  lastActivity: string
+  movementCount: number
+}
+
 export interface AppState {
   currentUserId: ID
   users: User[]
@@ -110,6 +131,10 @@ export interface AppState {
   ledger: LedgerEntry[]
   friendRequests: FriendRequest[]
   friendships: Friendship[]
+  /** Soldes par pote — source de verite cote serveur, cf. `RelationBalance`. */
+  balances: RelationBalance[]
+  /** true si `ledger` ne contient qu'une fenetre recente de l'historique. */
+  ledgerWindowed?: boolean
 }
 
 /** Vue agregee d'une relation bilaterale, pour l'ecran d'accueil. */

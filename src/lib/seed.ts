@@ -1,4 +1,4 @@
-import { ledgerFromExpense, ledgerFromSettlement, splitEqual } from './ledger'
+import { ledgerFromExpense, ledgerFromSettlement, recomputeBalances, splitEqual } from './ledger'
 import type { AppState, Expense, ExpenseShare, LedgerEntry, Settlement } from './types'
 
 const HOUR = 3_600_000
@@ -198,7 +198,7 @@ export function buildSeed(): AppState {
     ledger.push(...ledgerFromSettlement(s))
   }
 
-  return {
+  const state: AppState = {
     currentUserId: ME,
     users,
     groups,
@@ -215,5 +215,10 @@ export function buildSeed(): AppState {
         userLow: ME < u.id ? ME : u.id,
         userHigh: ME < u.id ? u.id : ME,
       })),
+    balances: [],
   }
+
+  // En demo il n'y a pas de vue Postgres : on derive les soldes du grand livre
+  // complet, qui tient entierement en memoire.
+  return { ...state, balances: recomputeBalances(state) }
 }
