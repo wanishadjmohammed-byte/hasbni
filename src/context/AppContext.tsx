@@ -108,6 +108,8 @@ interface AppContextValue {
   /** Le chef retire qui il veut ; chacun peut se retirer lui-meme. */
   removeGroupMember: (groupId: ID, userId: ID) => void
   updateGroup: (groupId: ID, name: string, emoji: string) => void
+  /** Reserve au createur. Les depenses sont detachees, jamais supprimees. */
+  deleteGroup: (groupId: ID) => void
   /** `email` est exclu : c'est un miroir du compte (audit SEC-3). */
   updateProfile: (patch: Partial<Pick<User, 'name' | 'phone' | 'avatar'>>) => void
   /** Saisies refusees definitivement par le serveur, gardees en local. */
@@ -538,6 +540,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [dispatch]
   )
 
+  const deleteGroup = useCallback(
+    (groupId: ID) => dispatch({ kind: 'group.delete', groupId }),
+    [dispatch]
+  )
+
   const discardRejectedOp = useCallback(async (opId: string) => {
     await discardRejected(opId)
     setRejected(await readRejected())
@@ -610,6 +617,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addGroupMember,
       removeGroupMember,
       updateGroup,
+      deleteGroup,
       updateProfile,
       rejectedOps: rejected,
       discardRejectedOp,
@@ -643,6 +651,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addGroupMember,
       removeGroupMember,
       updateGroup,
+      deleteGroup,
       updateProfile,
       rejected,
       discardRejectedOp,

@@ -142,6 +142,10 @@ export interface Database {
         Args: { p_group_id: string; p_user_id: string }
         Returns: undefined
       }
+      delete_group: {
+        Args: { p_group_id: string }
+        Returns: undefined
+      }
       rename_group: {
         Args: { p_group_id: string; p_name: string; p_emoji: string }
         Returns: undefined

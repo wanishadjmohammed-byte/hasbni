@@ -2,7 +2,7 @@
    Strategie : app shell precachee, navigations en network-first avec repli
    hors ligne, statiques Next en cache-first, reste en stale-while-revalidate. */
 
-const VERSION = 'hasbni-v2'
+const VERSION = 'hasbni-v3'
 const SHELL_CACHE = `${VERSION}-shell`
 const STATIC_CACHE = `${VERSION}-static`
 const PAGES_CACHE = `${VERSION}-pages`

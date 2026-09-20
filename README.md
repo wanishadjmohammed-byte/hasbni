@@ -26,8 +26,9 @@ a une app qui marche.
    `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Project Settings > API).
 4. Redemarrer `npm run dev` — les variables ne sont lues qu'au demarrage.
 
-**Base deja en service ?** Executer `supabase/patch-06-durcissement.sql`, le seul patch
-non encore applique. Il est idempotent.
+**Base deja en service ?** Executer, dans l'ordre :
+`supabase/patch-06-durcissement.sql`, `supabase/patch-07-admin.sql`,
+`supabase/patch-08-droits-et-groupes.sql`. Tous idempotents.
 
 L'authentification est **email + mot de passe** (provider Email, actif par defaut). Pour tester a
 plusieurs sans boite mail, desactiver **Authentication > Sign In / Providers > Email > Confirm
@@ -48,6 +49,12 @@ saisi a l'inscription.
 | Activite — tous les mouvements, file de confirmation | `/activite` | — |
 | Profil — compte, potes, demande par email, etat de synchro | `/profil` | — |
 | Connexion / inscription — email + mot de passe | `/login` | 4 (flow 1) |
+
+**Une depense appartient a celui qui a paye.** Lui seul peut l'annuler ou la
+corriger : si Youba paie pour moi, je ne peux pas effacer ma dette. La
+correction etait sinon une porte derobee — il suffisait de ramener le montant a
+1 DA. Un groupe, lui, est supprimable par son createur ; ses depenses sont
+detachees, jamais supprimees, et aucun solde ne bouge.
 
 Regles de gestion (CDC 3) : solde net sur mouvements confirmes, signe positif = l'autre me doit,
 statut « en attente » jusqu'a confirmation, annulation par ecriture inverse (jamais de

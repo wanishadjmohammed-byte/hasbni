@@ -63,14 +63,25 @@ export default function RelationClient({ userId }: { userId: ID }) {
   const movements = relationMovements(state, other.id)
 
   /**
-   * Seuls l'auteur et le payeur peuvent corriger — c'est ce que verifie aussi
-   * `amend_expense` cote SQL.
+   * Une depense n'appartient qu'a celui qui a avance l'argent.
+   *
+   * Si Youba paie pour moi, je ne peux ni l'annuler ni la corriger : ce serait
+   * effacer ma propre dette. Si je paie pour Youba, je reste maitre de ma
+   * saisie. Meme regle cote SQL (`expenses_update`, `amend_expense`) — ici on
+   * ne fait que ne pas proposer un bouton que le serveur refuserait.
    */
-  const canEdit = (m: Movement) => {
-    if (m.kind !== 'expense') return false
+  const iPaid = (m: Movement) => {
     const exp = state.expenses.find((e) => e.id === m.id)
-    return Boolean(exp && !exp.cancelled && (exp.createdBy === me.id || exp.payerId === me.id))
+    return Boolean(exp && !exp.cancelled && exp.payerId === me.id)
   }
+
+  const canEdit = (m: Movement) => m.kind === 'expense' && iPaid(m)
+
+  /**
+   * Un remboursement reste annulable par les deux parties : tant qu'il n'est
+   * pas confirme, c'est une declaration, pas une creance.
+   */
+  const canCancel = (m: Movement) => (m.kind === 'expense' ? iPaid(m) : !m.cancelled)
 
   const reminder = () => {
     const days = movements[0] ? daysSince(movements[0].createdAt) : 0
@@ -231,12 +242,20 @@ export default function RelationClient({ userId }: { userId: ID }) {
                           </button>
                         )}
 
-                        <button
-                          onClick={() => setCancelling(m)}
-                          className="ml-auto flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-navy/60 transition-colors hover:bg-red-50 hover:text-red-600"
-                        >
-                          <Undo2 size={13} /> Annuler
-                        </button>
+                        {canCancel(m) ? (
+                          <button
+                            onClick={() => setCancelling(m)}
+                            className="ml-auto flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-navy/60 transition-colors hover:bg-red-50 hover:text-red-600"
+                          >
+                            <Undo2 size={13} /> Annuler
+                          </button>
+                        ) : (
+                          m.kind === 'expense' && (
+                            <span className="ml-auto text-[11px] font-medium text-navy/60">
+                              {payer?.name ?? 'Le payeur'} a avance — lui seul peut modifier
+                            </span>
+                          )
+                        )}
                       </div>
                     </motion.div>
                   </motion.div>
@@ -323,13 +342,13 @@ export default function RelationClient({ userId }: { userId: ID }) {
           cancelMovement(cancelling.kind, cancelling.id)
           toast(`« ${cancelling.label} » annule — le solde est revenu en arriere`, 'danger')
         }}
-        title="Annuler ce mouvement"
+        title={cancelling?.kind === 'expense' ? 'Annuler cette depense' : 'Annuler ce remboursement'}
         message={
           cancelling
-            ? `« ${cancelling.label} » (${formatAmount(cancelling.amount)}) sera annule par une ecriture inverse. L'historique garde la trace des deux lignes.`
+            ? `« ${cancelling.label} » (${formatAmount(cancelling.amount)}) sera annule par une ecriture inverse : le solde avec ${other.name} revient en arriere. L'historique garde la trace des deux lignes.`
             : ''
         }
-        confirmLabel="Annuler le mouvement"
+        confirmLabel="Oui, annuler"
         tone="danger"
       />
     </>

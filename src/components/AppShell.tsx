@@ -1,12 +1,13 @@
 'use client'
 
-import { AlertTriangle, Loader2 } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, type ReactNode } from 'react'
 import Background from './Background'
 import BottomNav from './BottomNav'
 import PWAManager from './PWAManager'
 import Sidebar from './Sidebar'
+import Splash from './Splash'
 import Toasts from './Toasts'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
@@ -53,6 +54,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <BottomNav />
       <Toasts />
       <PWAManager />
+      <Splash show={blocked} />
       <main className="pad-nav relative z-10 min-h-screen lg:pl-56">
         {/* `safe-x` vit sur ce conteneur sans padding propre : il ajoute les
             encoches sans ecraser ni le px-* des enfants, ni le lg:pl-56. */}
@@ -85,14 +87,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                 </div>
               </div>
             </div>
-          ) : blocked ? (
-            <div className="flex min-h-screen items-center justify-center">
-              <div className="glass flex items-center gap-3 rounded-2xl px-5 py-4">
-                <Loader2 size={18} className="animate-spin text-brand" />
-                <span className="text-sm font-semibold text-navy">Chargement de tes comptes…</span>
-              </div>
-            </div>
-          ) : (
+          ) : blocked ? null : (
             children
           )}
         </div>

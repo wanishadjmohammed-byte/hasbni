@@ -2,7 +2,7 @@
 
 import clsx from 'clsx'
 import { motion } from 'framer-motion'
-import { ArrowRight, LogOut, Plus, Sparkles, UserMinus, UsersRound, Wand2 } from 'lucide-react'
+import { ArrowRight, LogOut, Plus, Sparkles, Trash2, UserMinus, UsersRound, Wand2 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import AddExpenseModal from './AddExpenseModal'
@@ -27,12 +27,13 @@ import { cardHover, listItemY, listParent, pageIn } from '@/lib/motion'
 import type { ID } from '@/lib/types'
 
 export default function GroupsClient() {
-  const { state, me, createGroup, addGroupMember, removeGroupMember, toast } = useApp()
+  const { state, me, createGroup, addGroupMember, removeGroupMember, deleteGroup, toast } = useApp()
   const [openGroup, setOpenGroup] = useState<ID | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [simplifyOpen, setSimplifyOpen] = useState<ID | null>(null)
   const [expenseGroup, setExpenseGroup] = useState<ID | null>(null)
   const [removing, setRemoving] = useState<{ groupId: ID; userId: ID; name: string } | null>(null)
+  const [deleting, setDeleting] = useState<{ id: ID; name: string } | null>(null)
   const [positions, setPositions] = useState<Map<ID, number> | null>(null)
 
   const [name, setName] = useState('')
@@ -187,6 +188,15 @@ export default function GroupsClient() {
               >
                 <Wand2 size={15} /> Simplifier
               </button>
+              {group.ownerId === me.id && (
+                <button
+                  onClick={() => setDeleting({ id: group.id, name: group.name })}
+                  aria-label={`Supprimer le groupe ${group.name}`}
+                  className="tap flex items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-navy/60 transition-colors hover:bg-red-50 hover:text-red-600"
+                >
+                  <Trash2 size={15} /> Supprimer
+                </button>
+              )}
               <button
                 onClick={() => {
                   setExpenseGroup(group.id)
@@ -434,6 +444,21 @@ export default function GroupsClient() {
         open={!!expenseGroup}
         onClose={() => setExpenseGroup(null)}
         presetGroupId={expenseGroup ?? undefined}
+      />
+
+      <ConfirmDialog
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => {
+          if (!deleting) return
+          deleteGroup(deleting.id)
+          setOpenGroup(null)
+          toast(`Groupe « ${deleting.name} » supprime`, 'info')
+        }}
+        title="Supprimer ce groupe"
+        message={`« ${deleting?.name} » disparait pour tous ses membres. Les depenses deja saisies sont conservees et restent dans vos historiques : un groupe sert a repartir, les dettes qu'il a creees sont entre vous deux et ne bougent pas.`}
+        confirmLabel="Supprimer le groupe"
+        tone="danger"
       />
 
       <ConfirmDialog

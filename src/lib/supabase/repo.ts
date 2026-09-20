@@ -486,6 +486,20 @@ export async function pushOp(sb: SB, profileId: ID, op: Op): Promise<void> {
       return
     }
 
+    case 'group.delete': {
+      const { error } = await sb.rpc('delete_group', { p_group_id: op.groupId })
+      if (!error) return
+      if (!isMissingFunction(error)) {
+        classifyIfError(error)
+        return
+      }
+
+      // Repli : la politique `groups_delete` autorise deja le createur.
+      const { error: directError } = await sb.from('groups').delete().eq('id', op.groupId)
+      classifyIfError(directError)
+      return
+    }
+
     case 'group.update': {
       const { error } = await sb.rpc('rename_group', {
         p_group_id: op.groupId,

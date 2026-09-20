@@ -31,6 +31,7 @@ export type Op =
   | { kind: 'group.member.add'; groupId: ID; userId: ID }
   | { kind: 'group.member.remove'; groupId: ID; userId: ID }
   | { kind: 'group.update'; groupId: ID; name: string; emoji: string }
+  | { kind: 'group.delete'; groupId: ID }
   | { kind: 'profile.update'; id: ID; patch: Partial<User> }
 
 export interface QueuedOp {
@@ -160,6 +161,20 @@ export function applyOp(state: AppState, op: Op): AppState {
         ...state,
         groups: state.groups.map((g) =>
           g.id === op.groupId ? { ...g, name: op.name, emoji: op.emoji } : g
+        ),
+      }
+
+    /**
+     * Suppression d'un groupe. Les depenses sont detachees, pas supprimees :
+     * les dettes sont bilaterales et survivent au groupe.
+     */
+    case 'group.delete':
+      return {
+        ...state,
+        groups: state.groups.filter((g) => g.id !== op.groupId),
+        groupMembers: state.groupMembers.filter((m) => m.groupId !== op.groupId),
+        expenses: state.expenses.map((e) =>
+          e.groupId === op.groupId ? { ...e, groupId: null } : e
         ),
       }
 

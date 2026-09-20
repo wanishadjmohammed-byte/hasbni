@@ -547,8 +547,10 @@ begin
   if exp.cancelled then
     raise exception 'Cette depense est annulee — elle ne peut plus etre corrigee';
   end if;
-  if me <> exp.created_by and me <> exp.payer_id then
-    raise exception 'Seul l''auteur ou le payeur peut corriger cette depense';
+  -- Seul le payeur : la correction est sinon une porte derobee vers
+  -- l'effacement de sa propre dette.
+  if me <> exp.payer_id then
+    raise exception 'Seul celui qui a paye peut corriger cette depense';
   end if;
   if p_amount is null or p_amount < 1 or p_amount > 100000000 then
     raise exception 'Montant invalide';
@@ -679,6 +681,26 @@ begin
      set name = coalesce(nullif(trim(p_name), ''), name),
          emoji = coalesce(nullif(trim(p_emoji), ''), emoji)
    where id = p_group_id;
+end;
+$$;
+
+/**
+ * Suppression d'un groupe par son createur.
+ *
+ * Un groupe est un CONTEXTE de saisie, pas une caisse : ses depenses sont
+ * detachees (`group_id` passe a null) et ses membres retires, mais les dettes
+ * qu'il a servi a repartir sont bilaterales et lui survivent intactes.
+ */
+create or replace function public.delete_group(p_group_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare me uuid;
+begin
+  me := public.current_profile_id();
+  if me is null then raise exception 'Profil introuvable'; end if;
+  if not public.is_group_owner(p_group_id, me) then
+    raise exception 'Seul le createur du groupe peut le supprimer';
+  end if;
+  delete from public.groups where id = p_group_id;
 end;
 $$;
 
@@ -830,6 +852,7 @@ grant execute on function public.amend_expense(uuid, integer, text, public.split
 grant execute on function public.create_group(text, text, uuid[], uuid) to authenticated;
 grant execute on function public.add_group_member(uuid, uuid) to authenticated;
 grant execute on function public.remove_group_member(uuid, uuid) to authenticated;
+grant execute on function public.delete_group(uuid) to authenticated;
 grant execute on function public.rename_group(uuid, text, text) to authenticated;
 grant execute on function public.group_positions(uuid) to authenticated;
 grant execute on function public.send_friend_request(text) to authenticated;
@@ -896,6 +919,10 @@ create policy groups_update on public.groups for update to authenticated
 
 -- `user_id = moi` en premier : en ajoutant le tout premier membre, la ligne
 -- n'est pas encore visible pour `is_group_member`.
+drop policy if exists groups_delete on public.groups;
+create policy groups_delete on public.groups for delete to authenticated
+  using (owner_id = public.current_profile_id());
+
 drop policy if exists group_members_select on public.group_members;
 create policy group_members_select on public.group_members for select to authenticated
   using (
@@ -934,10 +961,13 @@ drop policy if exists expenses_insert on public.expenses;
 create policy expenses_insert on public.expenses for insert to authenticated
   with check (created_by = public.current_profile_id());
 
+-- Seul le payeur controle sa depense : il est le creancier. Autoriser aussi
+-- `created_by` laissait un debiteur annuler — ou, via la correction, reecrire
+-- a 1 DA — une dette dont il n'etait pas le beneficiaire.
 drop policy if exists expenses_update on public.expenses;
 create policy expenses_update on public.expenses for update to authenticated
-  using (created_by = public.current_profile_id() or payer_id = public.current_profile_id())
-  with check (created_by = public.current_profile_id() or payer_id = public.current_profile_id());
+  using (payer_id = public.current_profile_id())
+  with check (payer_id = public.current_profile_id());
 
 drop policy if exists expense_shares_select on public.expense_shares;
 create policy expense_shares_select on public.expense_shares for select to authenticated

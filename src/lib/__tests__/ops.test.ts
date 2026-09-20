@@ -238,6 +238,55 @@ describe('applyOp — correction', () => {
   })
 })
 
+describe('applyOp — suppression d’un groupe', () => {
+  it('detache les depenses au lieu de les supprimer', () => {
+    let state = emptyState()
+    state = applyOp(state, { kind: 'group.member.add', groupId: 'g1', userId: OTHER })
+
+    const op = buildExpenseOp({
+      amount: 1000,
+      motive: 'Restau du groupe',
+      payerId: ME,
+      groupId: 'g1',
+      splitType: 'equal',
+      shares: { [ME]: 500, [OTHER]: 500 },
+      createdBy: ME,
+    })
+    state = applyOp(state, op)
+    const soldeAvant = balanceOf(state, OTHER).net
+
+    state = applyOp(state, { kind: 'group.delete', groupId: 'g1' })
+
+    // Le groupe disparait, ses membres aussi…
+    expect(state.groups.find((g) => g.id === 'g1')).toBeUndefined()
+    expect(state.groupMembers.filter((m) => m.groupId === 'g1')).toHaveLength(0)
+
+    // …mais la depense survit, simplement detachee, et le solde ne bouge pas :
+    // un groupe sert a repartir, les dettes qu'il cree sont bilaterales.
+    expect(state.expenses).toHaveLength(1)
+    expect(state.expenses[0].groupId).toBeNull()
+    expect(balanceOf(state, OTHER).net).toBe(soldeAvant)
+  })
+
+  it('ne touche pas aux depenses d’un autre groupe', () => {
+    let state = emptyState()
+    state = applyOp(
+      state,
+      buildExpenseOp({
+        amount: 400,
+        motive: 'Autre groupe',
+        payerId: ME,
+        groupId: 'g2',
+        splitType: 'custom',
+        shares: { [OTHER]: 400 },
+        createdBy: ME,
+      })
+    )
+    state = applyOp(state, { kind: 'group.delete', groupId: 'g1' })
+    expect(state.expenses[0].groupId).toBe('g2')
+  })
+})
+
 describe('buildExpenseOp', () => {
   it('ecarte les parts nulles', () => {
     const op = buildExpenseOp({
