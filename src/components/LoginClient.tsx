@@ -3,6 +3,7 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, Check, Eye, EyeOff, Loader2, MailCheck, X } from 'lucide-react'
+import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
@@ -169,9 +170,18 @@ export default function LoginClient() {
       <motion.div {...pageIn} className="glass w-full max-w-sm rounded-2xl p-6">
         <motion.div variants={listParent} initial="hidden" animate="show">
           <motion.div variants={listItemY} className="mb-6 text-center">
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-2xl font-bold text-white shadow-sm shadow-brand/25">
-              ح
-            </div>
+            {/* Le vrai logo plutot qu'un glyphe : c'est la premiere image de
+                la marque, et elle doit etre la meme que celle de l'ecran de
+                demarrage et de l'icone d'accueil. */}
+            <Image
+              src="/icon-512.png"
+              alt="Hasbni"
+              width={88}
+              height={88}
+              priority
+              className="mx-auto mb-3 h-[88px] w-[88px] rounded-full"
+              style={{ filter: 'drop-shadow(0 10px 18px rgba(11,58,43,0.22))' }}
+            />
             <h1 className="text-2xl font-bold tracking-tight text-navy">Hasbni</h1>
             <p className="mt-1 text-xs font-medium text-navy/60">
               Qui doit quoi, sans prise de tete.
