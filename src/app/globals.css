@@ -82,6 +82,10 @@ body {
   font-family: var(--font-sans);
   height: 100%;
   -webkit-tap-highlight-color: transparent;
+  /* Supprime le zoom au double-tap sans desactiver le defilement : c'est ce
+     qui donne la sensation « application » plutot que « page web ». */
+  touch-action: manipulation;
+  overscroll-behavior-y: none;
 }
 
 /* Fond de page — degrade principal */
@@ -216,6 +220,23 @@ select {
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
   width: 100%;
+}
+
+/* iOS zoome automatiquement sur tout champ sous 16 px des qu'il recoit le
+   focus — et ne dezoome pas ensuite. C'est la vraie cause de l'ecran qui
+   « saute » dans une webapp, et aucune balise viewport ne l'empeche. */
+@media (pointer: coarse) {
+  input[type='text'],
+  input[type='number'],
+  input[type='date'],
+  input[type='email'],
+  input[type='tel'],
+  input[type='password'],
+  input[type='search'],
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 input:focus,

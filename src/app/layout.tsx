@@ -4,9 +4,16 @@ import './globals.css'
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  // `maximumScale: 1` + `userScalable: false` bloquaient le zoom a deux
-  // doigts : echec WCAG 1.4.4, et un probleme reel pour lire des montants
-  // (audit UX-7). Le zoom est rendu a l'utilisateur.
+  // Ecran fige, demande produit : l'app doit se comporter comme une
+  // application, pas comme une page web qui bouge sous le doigt.
+  //
+  // A savoir : iOS ignore `user-scalable=no` depuis iOS 10, cette ligne
+  // n'agit donc que sur Android. Ce qui fige VRAIMENT l'ecran sur iPhone,
+  // c'est le duo dans `globals.css` — `touch-action: manipulation` (plus de
+  // zoom au double-tap) et des champs a 16 px (plus de zoom automatique a la
+  // saisie, celui qui ne revient jamais en arriere).
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: 'cover',
   themeColor: '#22A06B',
 }
