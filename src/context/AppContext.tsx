@@ -540,6 +540,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const sb = getSupabase()
       if (!sb || demo) throw new Error('Indisponible en mode demonstration')
       const saved = await setUsername(sb, username)
+      // On applique le changement localement AVANT de rafraichir : si le
+      // reseau flanche entre les deux, le pseudo reste affiche au lieu de
+      // sembler ne jamais avoir ete enregistre.
+      setState((prev) => ({
+        ...prev,
+        users: prev.users.map((u) =>
+          u.id === prev.currentUserId ? { ...u, username: saved } : u
+        ),
+      }))
       await refresh({ force: true })
       return saved
     },

@@ -132,6 +132,7 @@ export interface Database {
       send_friend_request: { Args: { target_email: string }; Returns: string }
       send_friend_request_to: { Args: { p_profile_id: string }; Returns: string }
       set_username: { Args: { p_username: string }; Returns: string }
+      username_available: { Args: { p_username: string }; Returns: boolean }
       search_profiles: {
         Args: { p_query: string }
         Returns: {

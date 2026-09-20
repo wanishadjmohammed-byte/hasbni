@@ -28,8 +28,8 @@ a une app qui marche.
 
 **Base deja en service ?** Executer, dans l'ordre :
 `supabase/patch-06-durcissement.sql`, `supabase/patch-07-admin.sql`,
-`supabase/patch-08-droits-et-groupes.sql`, `supabase/patch-09-pseudos-et-recherche.sql`.
-Tous idempotents.
+`supabase/patch-08-droits-et-groupes.sql`, `supabase/patch-09-pseudos-et-recherche.sql`,
+`supabase/patch-10-pseudo-a-inscription.sql`. Tous idempotents.
 
 L'authentification est **email + mot de passe** (provider Email, actif par defaut). Pour tester a
 plusieurs sans boite mail, desactiver **Authentication > Sign In / Providers > Email > Confirm
@@ -139,7 +139,10 @@ Animations : variantes partagees dans `src/lib/motion.ts`.
 
 ## Trouver un pote
 
-Chacun a un **pseudo** public (`@youba`), choisi dans Profil. La recherche se
+Chacun a un **pseudo** public (`@youba`), choisi a l'inscription et modifiable
+dans Profil. La disponibilite est verifiee pendant la frappe :
+`username_available` est un `exists` sur l'index unique qui ne renvoie qu'un
+booleen — pas de `count`, aucune ligne rapatriee, aucune donnee personnelle. La recherche se
 fait par DEBUT de pseudo ou de nom, jamais par sous-chaine — et c'est le coeur
 de sa tenue en charge : un index btree sait servir `like 'abc%'` en descendant
 l'arbre, alors que `like '%abc%'` l'ignore et balaye toute la table, a chaque

@@ -345,6 +345,28 @@ export async function sendFriendRequestTo(sb: SB, profileId: ID): Promise<'sent'
   return (data as 'sent' | 'accepted') ?? 'sent'
 }
 
+/**
+ * Un pseudo est-il libre ?
+ *
+ * Appelee a la frappe pendant l'inscription, donc volontairement minimale :
+ * cote serveur c'est un `exists` sur l'index unique, et il ne revient qu'un
+ * booleen — aucune ligne, aucune donnee personnelle.
+ */
+export async function isUsernameAvailable(
+  sb: SB,
+  username: string,
+  signal?: AbortSignal
+): Promise<boolean> {
+  let request = sb.rpc('username_available', { p_username: username })
+  if (signal) request = request.abortSignal(signal)
+  const { data, error } = await request
+  if (error) {
+    if (error.message.toLowerCase().includes('abort')) return false
+    throw new Error(translatePostgresError(error.message))
+  }
+  return Boolean(data)
+}
+
 /** Choix du pseudo. Format, unicite et cadence sont verifies cote serveur. */
 export async function setUsername(sb: SB, username: string): Promise<string> {
   const { data, error } = await sb.rpc('set_username', { p_username: username })

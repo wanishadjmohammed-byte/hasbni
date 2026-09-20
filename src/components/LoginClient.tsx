@@ -2,10 +2,12 @@
 
 import clsx from 'clsx'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowRight, Eye, EyeOff, Loader2, MailCheck } from 'lucide-react'
+import { ArrowRight, Check, Eye, EyeOff, Loader2, MailCheck, X } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
+import { getSupabase } from '@/lib/supabase/client'
+import { isUsernameAvailable } from '@/lib/supabase/repo'
 import { listItemY, listParent, pageIn } from '@/lib/motion'
 
 type Tab = 'signin' | 'signup'
@@ -19,6 +21,10 @@ export default function LoginClient() {
 
   const [tab, setTab] = useState<Tab>('signin')
   const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
+  /** null = pas encore verifie. */
+  const [available, setAvailable] = useState<boolean | null>(null)
+  const [checking, setChecking] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -30,11 +36,54 @@ export default function LoginClient() {
     if (signedIn && mode === 'supabase') router.replace(next)
   }, [signedIn, mode, router, next])
 
+  const usernameOk = /^[a-z0-9_.]{3,20}$/.test(username)
+  const controller = useRef<AbortController | null>(null)
+
+  /**
+   * Disponibilite verifiee pendant la frappe.
+   *
+   * Anti-rebond de 400 ms et abandon de la requete precedente : sinon chaque
+   * caractere part en requete, et une reponse lente peut ecraser une plus
+   * recente — afficher « libre » pour un pseudo deja pris.
+   *
+   * Cote serveur c'est un `exists` sur l'index unique qui ne renvoie qu'un
+   * booleen : l'appel le moins cher possible.
+   */
+  useEffect(() => {
+    if (tab !== 'signup' || !usernameOk || mode === 'demo') {
+      controller.current?.abort()
+      setAvailable(null)
+      setChecking(false)
+      return
+    }
+
+    setChecking(true)
+    const timer = window.setTimeout(async () => {
+      controller.current?.abort()
+      const next = new AbortController()
+      controller.current = next
+      const sb = getSupabase()
+      if (!sb) return
+      try {
+        const free = await isUsernameAvailable(sb, username, next.signal)
+        if (!next.signal.aborted) setAvailable(free)
+      } catch {
+        if (!next.signal.aborted) setAvailable(null)
+      } finally {
+        if (!next.signal.aborted) setChecking(false)
+      }
+    }, 400)
+
+    return () => window.clearTimeout(timer)
+  }, [username, usernameOk, tab, mode])
+
+  useEffect(() => () => controller.current?.abort(), [])
+
   const valid =
     mode === 'demo' ||
     (email.trim().length > 3 &&
       password.length >= 6 &&
-      (tab === 'signin' || name.trim().length > 0))
+      (tab === 'signin' || (name.trim().length > 0 && usernameOk && available === true)))
 
   const submit = async () => {
     setError(null)
@@ -49,7 +98,7 @@ export default function LoginClient() {
     setBusy(true)
     try {
       if (tab === 'signup') {
-        const result = await signUp(name, email, password)
+        const result = await signUp(name, email, password, username)
         if (result === 'confirm-email') {
           setConfirmSent(true)
           return
@@ -69,6 +118,7 @@ export default function LoginClient() {
     setTab(target)
     setError(null)
     setConfirmSent(false)
+    setAvailable(null)
   }
 
   if (confirmSent) {
@@ -159,6 +209,63 @@ export default function LoginClient() {
                     placeholder="Wanis"
                     autoComplete="given-name"
                   />
+
+                  <label
+                    htmlFor="signup-username"
+                    className="mb-1.5 mt-3 block text-xs font-medium text-navy/60"
+                  >
+                    Ton pseudo
+                  </label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-navy/55">
+                      @
+                    </span>
+                    <input
+                      id="signup-username"
+                      type="text"
+                      value={username}
+                      maxLength={20}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      autoComplete="username"
+                      // Le serveur n'accepte que ce jeu de caracteres : on
+                      // l'applique a la frappe plutot que de refuser apres coup.
+                      onChange={(e) =>
+                        setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''))
+                      }
+                      placeholder="youba"
+                      className="!pl-7 !pr-9"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                      {checking ? (
+                        <Loader2 size={15} className="animate-spin text-brand" />
+                      ) : available === true ? (
+                        <Check size={15} className="text-credit" />
+                      ) : available === false ? (
+                        <X size={15} className="text-debit" />
+                      ) : null}
+                    </span>
+                  </div>
+                  <p
+                    className={clsx(
+                      'mt-1 text-[11px] font-medium',
+                      available === false ? 'text-debit' : 'text-navy/60'
+                    )}
+                    aria-live="polite"
+                  >
+                    {username.length === 0
+                      ? "C'est par la que tes potes te trouveront."
+                      : !usernameOk
+                        ? '3 a 20 caracteres : lettres, chiffres, point ou tiret bas.'
+                        : checking
+                          ? 'Verification…'
+                          : available === false
+                            ? 'Deja pris — essaie autre chose.'
+                            : available === true
+                              ? 'Libre !'
+                              : ''}
+                  </p>
                 </motion.div>
               )}
             </AnimatePresence>

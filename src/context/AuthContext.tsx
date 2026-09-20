@@ -27,7 +27,12 @@ interface AuthContextValue {
   signedIn: boolean
   /** Connecte, mais aucun profil en base : schema non execute ou trigger absent. */
   profileMissing: boolean
-  signUp: (name: string, email: string, password: string) => Promise<SignUpResult>
+  signUp: (
+    name: string,
+    email: string,
+    password: string,
+    username: string
+  ) => Promise<SignUpResult>
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
 }
@@ -47,6 +52,9 @@ function translateError(message: string): string {
   }
   if (m.includes('unable to validate email') || m.includes('invalid email')) {
     return 'Adresse email invalide.'
+  }
+  if (m.includes('duplicate key') && m.includes('username')) {
+    return 'Ce pseudo vient d’etre pris — choisis-en un autre.'
   }
   // Quota d'envoi d'emails du projet Supabase (~2/heure sur le SMTP partage) :
   // ce n'est pas l'utilisateur qui insiste, c'est le projet qui est plafonne.
@@ -138,7 +146,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session])
 
   const signUp = useCallback(
-    async (name: string, email: string, password: string): Promise<SignUpResult> => {
+    async (
+      name: string,
+      email: string,
+      password: string,
+      username: string
+    ): Promise<SignUpResult> => {
       const sb = getSupabase()
       if (!sb) return 'signed-in'
 
@@ -146,8 +159,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await sb.auth.signUp({
         email: email.trim(),
         password,
-        // Repris par le trigger `handle_new_user` pour nommer le profil.
-        options: { data: { name: name.trim() } },
+        // Repris par le trigger `handle_new_user` : nom affiche et pseudo.
+        // Le pseudo est verifie une seconde fois cote SQL — si quelqu'un l'a
+        // pris entre-temps, le trigger en derive un proche plutot que de faire
+        // echouer l'inscription.
+        options: { data: { name: name.trim(), username: username.trim().toLowerCase() } },
       })
       if (error) throw new Error(translateError(error.message))
 

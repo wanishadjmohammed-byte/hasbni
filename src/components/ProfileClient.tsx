@@ -85,7 +85,6 @@ export default function ProfileClient() {
   const [username, setUsernameField] = useState(me.username ?? '')
   const [uBusy, setUBusy] = useState(false)
   const [uError, setUError] = useState<string | null>(null)
-  const [uSaved, setUSaved] = useState(false)
 
   useEffect(() => {
     if (searchParams.get('ajouter-pote')) setFriendOpen(true)
@@ -103,29 +102,40 @@ export default function ProfileClient() {
     })
     .reduce((sum, e) => sum + e.amount, 0)
 
-  const save = () => {
-    // `email` n'est volontairement pas modifiable : il reflete le compte, et
-    // sert de cle pour les demandes de pote (audit SEC-3).
-    updateProfile({ name, phone, avatar })
-    toast('Profil mis a jour')
-  }
-
-  const saveUsername = async () => {
+  /**
+   * Un seul bouton pour toute la fiche.
+   *
+   * Il y en avait deux : « Choisir » pour le pseudo, « Enregistrer » pour le
+   * reste. Celui qui porte l'icone de sauvegarde ne sauvait donc PAS le
+   * pseudo — on tapait son pseudo, on cliquait Enregistrer, et le champ se
+   * vidait au changement d'ecran sans qu'aucune erreur ne s'affiche. Deux
+   * boutons de sauvegarde sur un meme formulaire, c'est toujours ce qui
+   * arrive.
+   */
+  const save = async () => {
     if (uBusy) return
     setUBusy(true)
     setUError(null)
-    setUSaved(false)
     try {
-      const saved = await changeUsername(username)
-      setUsernameField(saved)
-      setUSaved(true)
-      toast('Pseudo mis a jour')
+      const wanted = username.trim()
+      if (wanted && wanted !== (me.username ?? '')) {
+        const saved = await changeUsername(wanted)
+        setUsernameField(saved)
+      }
+      // `email` n'est volontairement pas modifiable : il reflete le compte, et
+      // sert de cle pour les demandes de pote (audit SEC-3).
+      updateProfile({ name, phone, avatar })
+      toast('Profil mis a jour')
     } catch (e) {
+      // Le pseudo a ete refuse : on le dit, et on ne pretend pas avoir
+      // enregistre le reste.
       setUError(e instanceof Error ? e.message : 'Pseudo refuse')
     } finally {
       setUBusy(false)
     }
   }
+
+
 
   const download = async () => {
     try {
@@ -205,8 +215,8 @@ export default function ProfileClient() {
               <label htmlFor="profile-username" className="mb-1.5 block text-xs font-medium text-navy/60">
                 Pseudo
               </label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
+              <div>
+                <div className="relative">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-navy/55">
                     @
                   </span>
@@ -223,26 +233,16 @@ export default function ProfileClient() {
                       // l'appliquer a la frappe plutot que refuser apres coup.
                       setUsernameField(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''))
                       setUError(null)
-                      setUSaved(false)
                     }}
                     className="!pl-7"
                   />
                 </div>
-                <button
-                  onClick={() => void saveUsername()}
-                  disabled={uBusy || username === (me.username ?? '') || username.length < 3}
-                  className="tap shrink-0 rounded-xl border border-silver px-3 text-xs font-semibold text-navy/60 transition-colors hover:bg-white/50 hover:text-navy disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {uBusy ? <Loader2 size={14} className="animate-spin" /> : 'Choisir'}
-                </button>
               </div>
               {uError ? (
                 <p className="mt-1 text-[11px] font-semibold text-debit">{uError}</p>
               ) : (
                 <p className="mt-1 text-[11px] font-medium text-navy/60">
-                  {uSaved
-                    ? 'Pseudo enregistre.'
-                    : "C'est par la que tes potes te trouvent. 3 a 20 caracteres."}
+                  {"C'est par la que tes potes te trouvent. 3 a 20 caracteres."}
                 </p>
               )}
             </div>
@@ -271,10 +271,12 @@ export default function ProfileClient() {
           </div>
 
           <button
-            onClick={save}
+            onClick={() => void save()}
+            disabled={uBusy}
             className="mt-4 flex items-center gap-1.5 rounded-xl bg-brand tap px-4 text-sm font-semibold text-white shadow-sm shadow-brand/25 transition-colors hover:bg-ocean"
           >
-            <Save size={15} /> Enregistrer
+            {uBusy ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+            Enregistrer
           </button>
         </div>
 
